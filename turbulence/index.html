@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSO Turbulence Bench — 1 km link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070B14; --bg2:#04070E;
+  --panel:#0D1322; --panel2:#121A2C;
+  --rule:#1E2A44; --rule2:#2A3A5C;
+  --text:#E4E9F5; --dim:#8595B4; --faint:#55648A;
+  --beam:#FFB347; --beamHot:#FF7A3D; --beamDim:#7A5427;
+  --model:#9B8CFF; --alarm:#FF476F; --ok:#35D6A4; --air:#2FB3C9;
+  --sand:#3A2E1C;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --cond:'IBM Plex Sans Condensed','IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:0 0 40px}
+
+/* ---------- header ---------- */
+header{
+  position:relative;padding:20px 20px 14px;border-bottom:1px solid var(--rule);
+  background:linear-gradient(180deg,#0A1020,#070B14);
+}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--beam)}
+h1{font-family:var(--cond);font-weight:600;font-size:clamp(26px,5vw,42px);letter-spacing:-.01em;margin:4px 0 0;line-height:1}
+h1 .thin{color:var(--faint);font-weight:400}
+.sub{font-size:13.5px;color:var(--dim);margin-top:6px;max-width:640px;line-height:1.5}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.chip{font-family:var(--mono);font-size:11px;padding:7px 12px;background:var(--panel2);color:var(--dim);
+  border:1px solid var(--rule);border-radius:2px;cursor:pointer;transition:.15s}
+.chip:hover{border-color:var(--beam);color:var(--beam)}
+.chip.on{background:var(--beam);color:#0A0D14;border-color:var(--beam)}
+
+/* ---------- scene ---------- */
+#sceneWrap{position:relative;width:100%;height:clamp(280px,44vh,460px);background:var(--bg2);
+  border-bottom:1px solid var(--rule);overflow:hidden}
+#scene{display:block;width:100%;height:100%}
+.scenebar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:14px;align-items:center;
+  padding:8px 14px;font-family:var(--mono);font-size:10.5px;color:var(--faint);
+  background:linear-gradient(180deg,rgba(4,7,14,0),rgba(4,7,14,.9));pointer-events:none}
+.tbtns{position:absolute;right:12px;top:12px;display:flex;gap:6px}
+.tb{font-family:var(--mono);font-size:10.5px;padding:5px 9px;background:rgba(13,19,34,.85);
+  border:1px solid var(--rule);color:var(--dim);border-radius:2px;cursor:pointer}
+.tb.on{border-color:var(--beam);color:var(--beam)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1500px;margin:0 auto;padding:0 16px}
+.grid{display:grid;gap:14px;margin-top:14px}
+@media(min-width:900px){ .grid.main{grid-template-columns:300px 1fr} }
+@media(min-width:900px){ .grid.lower{grid-template-columns:1fr 1fr} }
+@media(min-width:1500px){ .grid.lower{grid-template-columns:340px 1fr 1fr} }
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:14px}
+.sec{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--beam);border-bottom:1px solid var(--rule);padding-bottom:6px;margin:0 0 12px}
+.sec.alt{color:var(--air)}
+.sec.mod{color:var(--model)}
+
+/* ---------- sliders ---------- */
+.ctl{margin-bottom:13px}
+.ctlhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.ctlhead label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.ctlhead .val{font-family:var(--mono);font-size:12.5px;color:var(--text)}
+.ctlhead .val span{color:var(--faint);font-size:10.5px;margin-left:3px}
+.hint{font-size:10.5px;color:var(--faint);margin-top:2px;line-height:1.4}
+input[type=range]{width:100%;height:16px;accent-color:var(--beam);background:transparent;cursor:pointer}
+
+/* ---------- metrics ---------- */
+.mgrid{display:grid;gap:7px;grid-template-columns:repeat(2,1fr)}
+@media(min-width:520px){.mgrid.four{grid-template-columns:repeat(4,1fr)}}
+.met{background:var(--panel2);border:1px solid var(--rule);border-radius:2px;padding:8px 10px}
+.met .k{font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.met .v{font-family:var(--mono);font-size:18px;line-height:1.05}
+.met .v small{font-size:10.5px;color:var(--faint);margin-left:3px}
+.met .s{font-size:10px;color:var(--faint);margin-top:3px;line-height:1.35}
+
+canvas.plot{display:block;width:100%;background:var(--bg2);border:1px solid var(--rule);border-radius:2px}
+@media(min-width:1100px){ .grid.pat{grid-template-columns:1.35fr 1fr} }
+.trackbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px 14px;margin-bottom:12px}
+.trackbar .ctl{margin-bottom:0}
+.seg{display:flex;gap:0;border:1px solid var(--rule);border-radius:2px;overflow:hidden;margin-bottom:12px}
+.seg button{flex:1;font-family:var(--mono);font-size:10.5px;padding:6px 4px;background:var(--panel2);
+  color:var(--dim);border:0;border-right:1px solid var(--rule);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--air);color:#061016}
+.toggle{font-family:var(--mono);font-size:10.5px;padding:6px 11px;background:var(--panel2);color:var(--dim);
+  border:1px solid var(--rule);border-radius:2px;cursor:pointer;transition:.15s}
+.toggle.on{border-color:var(--model);color:var(--model)}
+.toggle.hot.on{border-color:var(--beam);color:var(--beam)}
+.legend{font-family:var(--mono);font-size:10.5px;color:var(--dim);line-height:1.8;margin-top:9px}
+.legend i{font-style:normal;margin-right:6px}
+.note{font-size:12px;color:var(--dim);line-height:1.55;margin-top:9px}
+.callout{margin-top:10px;padding:9px 11px;background:var(--panel2);border:1px solid var(--rule);
+  border-left:2px solid var(--beam);border-radius:2px;font-size:12px;color:var(--dim);line-height:1.5}
+.callout b{font-family:var(--mono);color:var(--beam);font-weight:400}
+
+details{margin-top:14px;background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:12px 14px}
+summary{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary:before{content:"▸ ";color:var(--beam)}
+details[open] summary:before{content:"▾ "}
+details .body{margin-top:12px;font-size:13px;color:var(--dim);line-height:1.65;max-width:78ch}
+details .body h4{font-family:var(--cond);font-weight:600;color:var(--text);font-size:13px;letter-spacing:.06em;
+  text-transform:uppercase;margin:16px 0 5px}
+details .body code{font-family:var(--mono);font-size:12px;color:var(--beam);background:var(--panel2);padding:1px 5px;border-radius:2px}
+footer{max-width:1500px;margin:22px auto 0;padding:14px 16px 0;border-top:1px solid var(--rule);
+  font-size:11.5px;color:var(--faint);line-height:1.6}
+.badge{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:2px;border:1px solid currentColor}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="padding:0">
+    <div class="eyebrow">Level-0 digital twin · horizontal path</div>
+    <h1>FSO turbulence bench <span class="thin">/ 1 km</span></h1>
+    <div class="sub">The air between two telescopes is not empty. It is a slow-moving field of warm and cool
+      pockets, each one a weak lens, all of it blowing sideways. This is what that does to your beam.</div>
+    <div class="chips" id="presets"></div>
+    <div class="chips" id="tools"></div>
+  </div>
+</header>
+
+<div id="sceneWrap">
+  <canvas id="scene"></canvas>
+  <div class="tbtns">
+    <button class="tb on" id="btnRun">running</button>
+    <button class="tb on" id="btnEddy">air</button>
+    <button class="tb on" id="btnLT">long-term</button>
+    <button class="tb" id="btnDay">day sweep</button>
+  </div>
+  <div class="scenebar">
+    <span id="scaleNote"></span>
+    <span id="speedNote"></span>
+    <span style="margin-left:auto" id="regimeNote"></span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="grid main">
+    <!-- controls -->
+    <div class="panel">
+      <div class="sec alt">The air</div>
+      <div id="ctlAir"></div>
+      <div class="sec">The link</div>
+      <div id="ctlLink"></div>
+      <div class="sec mod">The budget</div>
+      <div id="ctlBudget"></div>
+    </div>
+
+    <!-- top metrics + speckle + scope -->
+    <div>
+      <div class="panel">
+        <div class="sec alt">How rough is the air</div>
+        <div class="mgrid four" id="mAir"></div>
+        <div class="note" id="airNote"></div>
+      </div>
+
+      <div class="grid lower" style="margin-top:14px">
+        <div class="panel">
+          <div class="sec">Receiver plane</div>
+          <canvas id="speckle" class="plot" style="aspect-ratio:1/1"></canvas>
+          <div class="legend" id="speckleLegend"></div>
+        </div>
+
+        <div class="panel" style="display:flex;flex-direction:column">
+          <div class="sec mod">Power into the detector</div>
+          <canvas id="scope" class="plot" style="height:190px"></canvas>
+          <div class="legend" id="scopeLegend"></div>
+          <div class="callout" id="burst"></div>
+        </div>
+
+        <div class="panel">
+          <div class="sec">Budget &amp; fades</div>
+          <div class="mgrid" id="mBudget"></div>
+          <div style="height:12px"></div>
+          <canvas id="outage" class="plot" style="height:168px"></canvas>
+          <div class="note">Outage against fade margin. The knee is your design point — left of it you are
+            buying nothing, right of it every dB gets expensive.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid pat" style="margin-top:14px">
+    <div class="panel">
+      <div class="sec mod">Pointing &amp; tracking loop</div>
+      <div class="seg" id="trkSeg">
+        <button data-v="0">no tracking</button>
+        <button data-v="1" class="on">closed loop</button>
+      </div>
+      <div class="trackbar" id="trackCtls"></div>
+      <canvas id="reject" class="plot" style="height:214px"></canvas>
+      <div class="legend" id="rejectLegend"></div>
+      <div class="mgrid" id="mTrack" style="margin-top:11px"></div>
+      <div class="callout" id="trackNote"></div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="sec">Fade distribution</div>
+        <canvas id="hist" class="plot" style="height:146px"></canvas>
+        <div class="legend" id="histLegend"></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="sec alt">Weather &amp; wavelength</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">
+          <button class="toggle" id="btnVis">drive from visibility</button>
+        </div>
+        <div class="seg" id="wxSeg">
+          <button data-v="fog" class="on">fog</button>
+          <button data-v="haze">haze</button>
+          <button data-v="dust">dust</button>
+        </div>
+        <div id="wxCtls"></div>
+        <div class="mgrid" id="mWx"></div>
+        <div class="note" id="wxNote"></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="sec">Diurnal cycle</div>
+        <canvas id="day" class="plot" style="height:104px"></canvas>
+        <div class="legend" id="dayLegend"></div>
+      </div>
+    </div>
+  </div>
+
+  <details>
+    <summary>How to read this, and when it is the wrong tool</summary>
+    <div class="body">
+      <h4>The one number that runs everything</h4>
+      Rytov variance, <code>σ²R = 1.23·Cn²·k^(7/6)·L^(11/6)</code>, is a single scalar answer to "how rough is
+      this path." Below about 1 you are in weak turbulence and lognormal fade statistics hold. Above it the
+      intensity fluctuations begin to saturate and everything here turns optimistic. Note the exponent on range:
+      doubling the path makes turbulence 3.6× worse, not 2×. That is why 1 km is a real test and 100 m is not.
+
+      <h4>Two effects, and they are not the same problem</h4>
+      <b style="color:var(--beam)">Spreading and wander</b> cost you <em>mean</em> power. They are a link-budget
+      problem — watch the solid beam envelope grow past the dashed diffraction-only envelope in the scene above.
+      <b style="color:var(--model)">Scintillation</b> costs you <em>availability</em>. The mean is fine; the deep
+      fades are what drop packets. That is the scope trace.
+
+      <h4>Why r₀ versus your beam size decides the character</h4>
+      When the Fried coherence length r₀ is larger than the beam, the beam mostly gets <em>tilted</em> as a whole —
+      it wanders, and a tracking loop can chase it. When r₀ drops below the beam diameter, the wavefront breaks up
+      into independent patches and the beam <em>shatters</em> into speckle, which no gimbal can fix. Slide Cn² up
+      and watch the eddies in the scene shrink past the beam width. That crossover is the moment tracking stops
+      being the answer and aperture averaging or diversity becomes the answer.
+
+      <h4>Why the receiver aperture is the best knob you have</h4>
+      A large lens collects more mean power <em>and</em> integrates over more speckle cells, so it suppresses
+      scintillation at the same time. Compare σ²I point against σ²I aperture as you widen D. Once D is
+      comfortably bigger than the Fresnel scale √(λL) — about 39 mm at 1 km and 1550 nm — you start winning hard.
+      Adding glass is very often cheaper than adding transmit power or coding gain.
+
+      <h4>Wind sets the clock, not the depth</h4>
+      Crosswind does not change how deep the fades are, only how fast they arrive, through <code>v/√(λL)</code>.
+      This is the number that sizes an interleaver: at 1.25 Gbps a 2 ms fade is 2.5 Mbit of buffer, which is a
+      memory budget conversation, not a hand-wave.
+
+      <h4>The tracking loop, and why frame rate beats gain</h4>
+      Beam wander sits on a Tyler tilt spectrum: roughly f^(-2/3) up to a knee at 0.24·v/D_tx, then
+      f^(-11/3) above it. Most of the variance piles up just below that knee, so where the knee sits
+      relative to your sampler decides everything. The panel shows the disturbance and what survives
+      the loop, with the region above Nyquist shaded — the loop cannot see anything in there, cannot
+      reject it, and folds it back into the control band as apparent low-frequency error.
+      <br><br>
+      Two failure modes are worth provoking deliberately. Set the frame rate very low and watch the
+      <em>above Nyquist</em> figure climb past 50% while rejection collapses to under a dB: no gain
+      tuning recovers that, only a faster camera. Then set a high bandwidth against a knee the loop
+      cannot reach and watch rejection go <em>negative</em> — the sensitivity peak near crossover
+      injects more than the integrator removes. That is the waterbed, and it is why "turn up the gain"
+      is usually the wrong instinct. <code>optimise loop</code> finds the bandwidth that genuinely
+      minimises residual for your delay, which is often far lower than you would guess.
+      <br><br>
+      Note also that with a wide, pointing-tolerant beam the loop buys nothing, because wander is a
+      small fraction of the beam radius to begin with. Tracking only starts paying once the beam is
+      tight enough that missing costs you real power. That tension — divergence for tolerance versus
+      divergence for gain — is the actual design decision.
+
+      <h4>Dust is not fog</h4>
+      Fog droplets are comparable to the wavelength, so scattering is selective and 1550 nm beats
+      850 nm. Dust particles are tens of microns, far larger than either, so scattering is
+      non-selective, the Kim exponent goes to zero, and the two wavelengths are identical. Switch the
+      weather panel between fog and dust at the same visibility and watch the wavelength advantage
+      vanish. In the Gulf that is the case that matters, and it is the opposite of what most FSO
+      literature assumes.
+
+      <h4>The diurnal curve</h4>
+      Cn² over ground swings three orders of magnitude across a day. The two dips are the neutral
+      events near sunrise and sunset, when the surface heat flux passes through zero and the
+      temperature gradient briefly vanishes. Best seeing of the day by a wide margin, and the reason
+      field campaigns start early. Hit <code>day sweep</code> and watch a link that is comfortable at
+      dawn shatter by early afternoon without a single parameter changing except the sun.
+
+      <h4>Closing the loop with real data</h4>
+      <code>export 30 s log</code> writes a synthetic received-power CSV generated from exactly the
+      physics on screen, with the configuration embedded in the header comments. Run
+      <code>calibrate.py</code> against it and you should get your own Cn² back. Then run the same
+      script against a real campaign log and see how far apart they land. On a clean record the
+      inversion is good to a couple of percent; when it refuses to converge, that refusal is itself
+      the finding — it usually means something in the record is not atmospheric.
+
+      <h4>When to reach for this</h4>
+      For the questions you would otherwise answer with a shrug. What does going from 50 mm to 100 mm receive
+      optics actually buy? Is 10 dB of margin generous or marginal here? Would 5 km be crazy? All one slider away.
+
+      <h4>When it stops being enough</h4>
+      Do not use it to predict a specific afternoon. Once σ²R passes 1, or you want coupling into single-mode
+      fibre (which depends on wavefront <em>shape</em>, not just intensity), or you want to design a tracking loop
+      against a measured disturbance spectrum — you need split-step propagation through phase screens. This model
+      has no wavefront at all, only the statistics of one. The next honest step is calibration: fit σ²I and the
+      fade rate to real received-power logs and back out the Cn² and effective wind the atmosphere was actually
+      handing you.
+    </div>
+  </details>
+
+  <footer>
+    Plane-wave Rytov and Andrews scintillation, uniform Cn² along the path, Kolmogorov spectrum, lognormal fades,
+    Taylor frozen-flow time axis. Aperture averaging from the Andrews plane-wave approximation. The scene is
+    anamorphic: transverse axis is true-to-scale in millimetres, the longitudinal axis is compressed roughly
+    1000:1, and time is slowed by the factor shown so individual fades are visible. Ignores inner and outer scale,
+    residual tracking error, saturation of the lognormal tail beyond σ²R ≈ 1, detector noise, and any real
+    scattering model for dust or fog beyond a flat dB/km.
+  </footer>
+</div>
+
+<script>
+/* =================================================================== */
+/*  MODEL                                                              */
+/* =================================================================== */
+function erfc(x){
+  const z=Math.abs(x), t=1/(1+z/2);
+  const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+
+    t*(-0.18628806+t*(0.27886807+t*(-1.1352039+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;
+}
+let _spare=null;
+function randn(){
+  if(_spare!==null){const s=_spare;_spare=null;return s;}
+  let u,v,s;
+  do{u=Math.random()*2-1;v=Math.random()*2-1;s=u*u+v*v;}while(s>=1||s===0);
+  const m=Math.sqrt(-2*Math.log(s)/s);_spare=v*m;return u*m;
+}
+
+const P={
+  logCn2:-13, v:3, alpha:6,
+  L:1000, lambdaNm:1550, W0mm:1.5, Dmm:50,
+  PtxDBm:13, sensDBm:-20, opticsDB:3, rateGbps:1.25,
+  timeScale:0.05, running:true, eddies:true, longterm:true,
+  trkOn:1, trkFs:200, trkLat:1, trkBw:20,
+  useVis:false, wxType:'fog', visKm:2.0,
+  daySweep:false, hour:14.0
+};
+
+function model(){
+  const lambda=P.lambdaNm*1e-9, k=2*Math.PI/lambda, L=P.L;
+  const Cn2=Math.pow(10,P.logCn2), W0=P.W0mm/1000, D=P.Dmm/1000, a=D/2;
+
+  const r0=Math.pow(0.423*k*k*Cn2*L,-3/5);
+  const sigR2=1.23*Cn2*Math.pow(k,7/6)*Math.pow(L,11/6);
+  const s65=Math.pow(sigR2,6/5);
+  const sigI2pt=Math.exp(0.49*sigR2/Math.pow(1+1.11*s65,7/6)+0.51*sigR2/Math.pow(1+0.69*s65,5/6))-1;
+  const A=Math.pow(1+1.062*(k*D*D/(4*L)),-7/6);
+  const sigI2=A*sigI2pt;
+
+  const Wdiff=W0*Math.sqrt(1+Math.pow(2*L/(k*W0*W0),2));
+  const Lam=2*L/(k*Wdiff*Wdiff);
+  const WLT=Wdiff*Math.sqrt(1+1.33*sigR2*Math.pow(Lam,5/6));
+  const wander=Math.sqrt(2.42*Cn2*Math.pow(L,3)*Math.pow(W0,-1/3));
+  const WST=Math.sqrt(Math.max(WLT*WLT-2*wander*wander, 0.35*Wdiff*Wdiff));
+
+  // the loop eats part of the wander; what is left re-inflates the beam
+  const trk=trackSolve(wander,W0,L,P.v,lambda);
+  const wanderEff=P.trkOn?Math.min(trk.wanderEff,wander*4):wander;
+  const WLTe=Math.sqrt(WST*WST+2*wanderEff*wanderEff);
+  const trackGainDB=10*Math.log10((1-Math.exp(-2*a*a/(WLTe*WLTe)))/
+                                  Math.max(1-Math.exp(-2*a*a/(WLT*WLT)),1e-15));
+
+  const alphaEff=P.useVis?kimAlpha(P.visKm,P.lambdaNm,P.wxType):P.alpha;
+  const capture=1-Math.exp(-2*a*a/(WLTe*WLTe));
+  const geoDB=10*Math.log10(Math.max(capture,1e-12));
+  const atmDB=-alphaEff*(L/1000);
+  const PrxDBm=P.PtxDBm+geoDB+atmDB-P.opticsDB;
+  const margin=PrxDBm-P.sensDBm;
+
+  const sln2=Math.max(Math.log(1+sigI2),1e-8), sln=Math.sqrt(sln2);
+  const z=(margin*Math.LN10/10-sln2/2)/sln;
+  const outage=0.5*erfc(z/Math.SQRT2);
+
+  const rF=Math.sqrt(lambda*L);
+  const nu0=P.v/rF;
+  const down=margin<=0;
+  const fadeRate=down?0:nu0*Math.exp(-z*z/2);
+  const meanFade=(!down&&fadeRate>1e-6)?outage/fadeRate:0;
+  const burstBits=meanFade*P.rateGbps*1e9;
+
+  let regime='weak', regColor='var(--ok)';
+  if(sigR2>1&&sigR2<=10){regime='moderate';regColor='var(--beam)';}
+  else if(sigR2>10){regime='strong / saturating';regColor='var(--alarm)';}
+
+  // transverse framing for the scene, in mm
+  const spanMM=Math.max(4.2*WLTe*1000, 2.6*D*1000, 2.2*r0*1000, 60);
+  // the receiver panel zooms in on the aperture neighbourhood instead
+  const spanRxMM=Math.max(3.0*D*1000, 6.0*rF*1000, 2.6*wanderEff*1000, 40);
+  const divMrad=2*lambda/(Math.PI*W0)*1000;
+
+  return {lambda,k,L,Cn2,W0,D,a,spanRxMM,divMrad,trk,wanderEff,WLTe,trackGainDB,alphaEff,
+          r0,sigR2,sigI2pt,A,sigI2,Wdiff,WLT,WST,wander,
+          capture,geoDB,atmDB,PrxDBm,margin,sln,sln2,outage,rF,nu0,fadeRate,meanFade,
+          burstBits,down,regime,regColor,spanMM};
+}
+let M=model();
+
+/* ------------------------------------------------------------------ */
+/*  Kim/Kruse specific attenuation. q is the wavelength exponent —      */
+/*  it goes to zero for particles much larger than lambda, which is     */
+/*  why 1550 nm buys you nothing in dust.                               */
+/* ------------------------------------------------------------------ */
+function kimQ(V,type){
+  if(type==='dust')return 0;
+  if(V>50)return 1.6;
+  if(V>6)return 1.3;
+  if(V>1)return 0.16*V+0.34;
+  if(V>0.5)return V-0.5;
+  return 0;
+}
+function kimAlpha(V,lamNm,type){
+  return 17.0/Math.max(V,0.02)*Math.pow(lamNm/550,-kimQ(V,type));
+}
+
+/* Characteristic desert diurnal Cn2 curve: quiet at night, a hard peak
+   in early afternoon, and the two neutral-event minima near sunrise and
+   sunset when the surface heat flux passes through zero. */
+function cn2Diurnal(h){
+  const sol=Math.max(0,Math.sin(Math.PI*(h-5.5)/13));
+  const dip=-0.75*Math.exp(-Math.pow((h-6.3)/0.75,2))-0.75*Math.exp(-Math.pow((h-18.4)/0.85,2));
+  return -15.7+2.95*Math.pow(sol,0.75)+dip;
+}
+function windDiurnal(h){
+  const sol=Math.max(0,Math.sin(Math.PI*(h-5.5)/13));
+  return 1.2+4.2*Math.pow(sol,0.8);
+}
+
+/* ------------------------------------------------------------------ */
+/*  TRACKING LOOP                                                       */
+/*  Disturbance is transmit beam wander on a Tyler tilt spectrum:       */
+/*  f^-2/3 below the aperture-crossing knee, f^-11/3 above it.          */
+/*  The loop is a Type-I integrator with transport delay and ZOH.       */
+/* ------------------------------------------------------------------ */
+function trackSolve(wander,W0,L,v,lam){
+  const sigD=wander/Math.SQRT2/L;                 // rad rms, per axis
+  const fk=Math.max(0.24*v/(2*W0),1e-3);          // Tyler knee
+  const varD=sigD*sigD;
+  const Cn=varD/(3.375*Math.pow(fk,1/3));
+  const S=f=>f<fk ? Cn*Math.pow(f,-2/3) : Cn*Math.pow(fk,3)*Math.pow(f,-11/3);
+
+  const fs=P.trkFs, tau=(P.trkLat+0.5)/fs;
+  const bwMax=Math.min(1/(6*tau), fs/8);          // 30 deg phase margin, and sane vs fs
+  const bw=P.trkOn?Math.min(P.trkBw,bwMax):0;
+  const clamped=P.trkOn&&P.trkBw>bwMax*1.001;
+  const pm=90-360*bw*tau;
+
+  const f0=Math.max(fk*1e-5,1e-4), f1=Math.max(fk,fs)*1e3;
+  const N=560, lf0=Math.log(f0), lf1=Math.log(f1), dl=(lf1-lf0)/N;
+  // renormalise the discrete grid so the open-loop integral is exactly varD
+  let acc=0;
+  for(let i=0;i<=N;i++){const f=Math.exp(lf0+i*dl);acc+=S(f)*f*dl;}
+  const gnorm=acc>0?varD/acc:1;
+  let varR=0, varAlias=0, peak=0;
+  const curveD=[], curveR=[];
+  for(let i=0;i<=N;i++){
+    const f=Math.exp(lf0+i*dl), df=f*dl;
+    const sd=S(f)*gnorm;
+    let g=1;
+    if(P.trkOn&&bw>0&&f<fs/2){
+      const th=2*Math.PI*f*tau;
+      const Lr=-(bw/f)*Math.sin(th), Li=-(bw/f)*Math.cos(th);
+      g=1/((1+Lr)*(1+Lr)+Li*Li);
+      const zoh=Math.sin(Math.PI*f/fs)/(Math.PI*f/fs);
+      g*=Math.max(zoh*zoh,1e-6);
+    }
+    const sr=sd*g;
+    varR+=sr*df;
+    if(f>=fs/2)varAlias+=sd*df;
+    if(sd>peak)peak=sd;
+    curveD.push([f,sd]); curveR.push([f,sr]);
+  }
+  const sigR=Math.sqrt(Math.max(varR,1e-24));
+  const rejDB=10*Math.log10(Math.max(varD,1e-30)/Math.max(varR,1e-30));
+  return {sigD,sigR,fk,fs,tau,bw,bwMax,clamped,pm,rejDB,peak,curveD,curveR,
+          aliasFrac:varD>0?varAlias/varD:0,
+          wanderEff:sigR*L*Math.SQRT2};
+}
+
+/* Scan for the bandwidth that actually minimises residual jitter. With a
+   delay in the loop there is a real optimum: too little and you reject
+   nothing, too much and the sensitivity peak injects more than it removes. */
+function bestBandwidth(){
+  const keep=P.trkBw; let best=keep, bestVar=Infinity;
+  const M0=model(), hi=M0.trk.bwMax;
+  for(let i=0;i<=48;i++){
+    P.trkBw=hi*Math.pow(10,-3+3*i/48);
+    const r=model().trk.sigR;
+    if(r<bestVar){bestVar=r;best=P.trkBw;}
+  }
+  P.trkBw=keep;
+  return best;
+}
+
+/* =================================================================== */
+/*  CONTROLS                                                           */
+/* =================================================================== */
+const fmtSci=x=>{const e=Math.floor(Math.log10(Math.abs(x)));const m=x/Math.pow(10,e);
+  return m.toFixed(1)+'×10'+String(e).replace('-','\u207B').replace(/[0-9]/g,d=>'⁰¹²³⁴⁵⁶⁷⁸⁹'[+d]);};
+
+const CONTROLS=[
+  {g:'air',k:'logCn2',label:'Cn²',unit:'m⁻²ᐟ³',min:-17,max:-12,step:.1,fmt:v=>fmtSci(Math.pow(10,v)),
+   hint:'10⁻¹⁷ still night · 10⁻¹³ hot asphalt at noon'},
+  {g:'air',k:'v',label:'Crosswind',unit:'m/s',min:.5,max:15,step:.5,
+   hint:'Sets how fast fades arrive, not how deep they go'},
+  {g:'air',k:'alpha',label:'Clear-air loss',unit:'dB/km',min:0,max:30,step:.5,
+   hint:'Dust, haze, fog. Attenuation — a separate problem from turbulence'},
+  {g:'air',k:'timeScale',label:'Time',unit:'× real',min:-2.4,max:0,step:.1,log:true,
+   fmt:v=>'1/'+Math.round(1/Math.pow(10,v)),hint:'Slow the clock down to watch individual fades'},
+
+  {g:'link',k:'L',label:'Range',unit:'m',min:100,max:5000,step:50},
+  {g:'link',k:'lambdaNm',label:'Wavelength',unit:'nm',min:800,max:1600,step:50},
+  {g:'link',k:'W0mm',label:'Tx waist W₀',unit:'mm',min:0.5,max:60,step:.5,
+   hint:'Small waist = wide, pointing-tolerant beam. Read the divergence off the scene'},
+  {g:'link',k:'Dmm',label:'Rx aperture D',unit:'mm',min:10,max:400,step:5,
+   hint:'More light AND less scintillation — the best knob you have'},
+
+  {g:'budget',k:'PtxDBm',label:'Tx power',unit:'dBm',min:0,max:33,step:1},
+  {g:'budget',k:'sensDBm',label:'Rx sensitivity',unit:'dBm',min:-45,max:-5,step:1},
+  {g:'budget',k:'opticsDB',label:'Fixed optics loss',unit:'dB',min:0,max:12,step:.5},
+  {g:'budget',k:'rateGbps',label:'Payload rate',unit:'Gbps',min:.1,max:10,step:.05},
+
+  {g:'track',k:'trkFs',label:'Frame rate',unit:'Hz',min:0,max:3.3,step:.02,log:true,
+   fmt:v=>{const x=Math.pow(10,v);return x>=10?String(Math.round(x)):x.toFixed(1);}},
+  {g:'track',k:'trkLat',label:'Latency',unit:'frames',min:0,max:4,step:1},
+  {g:'track',k:'trkBw',label:'Loop bandwidth',unit:'Hz',min:-2,max:2.7,step:.02,log:true,
+   fmt:v=>{const x=Math.pow(10,v);return x>=10?String(Math.round(x)):x.toFixed(2);}},
+
+  {g:'wx',k:'visKm',label:'Visibility',unit:'km',min:-1.3,max:1.7,step:.02,log:true,
+   fmt:v=>{const x=Math.pow(10,v);return x>=10?String(Math.round(x)):x.toFixed(2);}}
+];
+
+function buildControls(){
+  const map={air:'ctlAir',link:'ctlLink',budget:'ctlBudget',track:'trackCtls',wx:'wxCtls'};
+  CONTROLS.forEach(c=>{
+    const host=document.getElementById(map[c.g]);
+    const d=document.createElement('div'); d.className='ctl';
+    const raw=c.log?Math.log10(P[c.k]):P[c.k];
+    d.innerHTML=`<div class="ctlhead"><label>${c.label}</label>
+      <div class="val" id="v_${c.k}"></div></div>
+      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${raw}" id="s_${c.k}">
+      ${c.hint?`<div class="hint">${c.hint}</div>`:''}`;
+    host.appendChild(d);
+    const inp=d.querySelector('input');
+    inp.addEventListener('input',e=>{
+      const val=parseFloat(e.target.value);
+      P[c.k]=c.log?Math.pow(10,val):val;
+      M=model(); needField=true; refresh();
+    });
+  });
+}
+function refreshControlValues(){
+  const aS=document.getElementById('s_alpha');
+  if(aS){aS.disabled=P.useVis; aS.style.opacity=P.useVis?0.35:1;
+    if(P.useVis){P.alpha=Math.min(30,kimAlpha(P.visKm,P.lambdaNm,P.wxType));aS.value=P.alpha;}}
+  CONTROLS.forEach(c=>{
+    const el=document.getElementById('v_'+c.k); if(!el)return;
+    const v=P[c.k];
+    el.innerHTML=(c.fmt?c.fmt(c.log?Math.log10(v):v):(Math.abs(v)<10?v.toFixed(2).replace(/\.?0+$/,''):Math.round(v)))
+      +`<span>${c.unit}</span>`;
+  });
+}
+
+const PRESETS=[
+  {n:'Clear night',      logCn2:-15.3, v:1.5, alpha:.6},
+  {n:'Overcast day',     logCn2:-14.3, v:3,   alpha:1.2},
+  {n:'Desert afternoon', logCn2:-13.0, v:5,   alpha:2},
+  {n:'Dust haze',        logCn2:-13.6, v:7,   alpha:12},
+  {n:'Sea fog',          logCn2:-15.0, v:4,   alpha:26}
+];
+function buildPresets(){
+  const host=document.getElementById('presets');
+  PRESETS.forEach(pr=>{
+    const b=document.createElement('button'); b.className='chip'; b.textContent=pr.n;
+    b.onclick=()=>{
+      P.logCn2=pr.logCn2; P.v=pr.v; P.alpha=pr.alpha;
+      document.getElementById('s_logCn2').value=pr.logCn2;
+      document.getElementById('s_v').value=pr.v;
+      document.getElementById('s_alpha').value=pr.alpha;
+      [...host.children].forEach(c=>c.classList.remove('on')); b.classList.add('on');
+      M=model(); needField=true; refresh();
+    };
+    host.appendChild(b);
+  });
+}
+
+/* =================================================================== */
+/*  EXPORT / PERMALINK                                                 */
+/* =================================================================== */
+const HASH_KEYS=['logCn2','v','alpha','L','lambdaNm','W0mm','Dmm','PtxDBm','sensDBm',
+                 'opticsDB','rateGbps','trkOn','trkFs','trkLat','trkBw','useVis','visKm','wxType'];
+function encodeConfig(){
+  return HASH_KEYS.map(k=>k+'='+(typeof P[k]==='number'?(+P[k].toFixed(4)):
+        (P[k]===true?1:P[k]===false?0:P[k]))).join('&');
+}
+function decodeConfig(h){
+  if(!h)return;
+  h.replace(/^#/,'').split('&').forEach(kv=>{
+    const [k,val]=kv.split('=');
+    if(!HASH_KEYS.includes(k)||val===undefined)return;
+    if(k==='wxType'){P[k]=val;return;}
+    if(k==='useVis'){P[k]=val==='1'||val==='true';return;}
+    const n=parseFloat(val); if(isFinite(n))P[k]=n;
+  });
+}
+function download(name,text,mime){
+  const b=new Blob([text],{type:mime||'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);
+}
+/* Generate a synthetic received-power log with exactly the physics on screen,
+   so calibrate.py can be pointed at it and the inversion checked end to end. */
+function synthLog(seconds){
+  const dt=DT, n=Math.round(seconds/dt);
+  const fc=Math.min(M.nu0,1/(4*dt)), a1=Math.exp(-2*Math.PI*fc*dt), b1=Math.sqrt(1-a1*a1);
+  const fw=Math.min(Math.max(M.trk.fk,P.trkOn?M.trk.bw:0),1/(4*dt));
+  const a2=Math.exp(-2*Math.PI*fw*dt), b2=Math.sqrt(1-a2*a2), s1=M.wanderEff/Math.SQRT2;
+  const S=M.WST*M.WST+M.a*M.a, norm=1/(1+2*M.wanderEff*M.wanderEff/S);
+  let g=0,wx=0,wy=0;
+  const out=['# FSO turbulence bench synthetic log',
+             '# '+encodeConfig(),
+             '# Cn2='+M.Cn2.toExponential(3)+' v='+P.v+' L='+P.L+' D='+P.Dmm+'mm lambda='+P.lambdaNm+'nm',
+             't_s,rx_dbm'];
+  for(let i=0;i<n;i++){
+    g=a1*g+b1*randn(); wx=a2*wx+b2*s1*randn(); wy=a2*wy+b2*s1*randn();
+    const lin=Math.exp(-M.sln2/2+M.sln*g)*Math.exp(-2*(wx*wx+wy*wy)/S)/norm;
+    out.push((i*dt).toFixed(5)+','+(M.PrxDBm+10*Math.log10(Math.max(lin,1e-9))).toFixed(4));
+  }
+  return out.join('\n');
+}
+
+/* =================================================================== */
+/*  SIMULATION STATE                                                   */
+/* =================================================================== */
+const DT=1/2000;                 // simulation step, seconds
+const SCOPE_WINDOW=1.0;          // seconds shown
+const NSCOPE=Math.round(SCOPE_WINDOW/DT);
+const scope=new Float32Array(NSCOPE).fill(-60);
+let sim={gs:0, wx:0, wy:0, t:0, below:0, n:0, cross:0, tAcc:0, prev:0};
+
+function stepSim(dt){
+  // scintillation: first-order coloured noise at the Fresnel-crossing rate
+  const fc=Math.min(M.nu0, 1/(4*dt));
+  const a1=Math.exp(-2*Math.PI*fc*dt), b1=Math.sqrt(1-a1*a1);
+  sim.gs=a1*sim.gs+b1*randn();
+
+  // beam wander: slower, set by the beam crossing time
+  const fw=Math.min(Math.max(M.trk.fk, P.trkOn?M.trk.bw:0), 1/(4*dt));
+  const a2=Math.exp(-2*Math.PI*fw*dt), b2=Math.sqrt(1-a2*a2);
+  const s1=M.wanderEff/Math.SQRT2;       // per-axis std, so <r²> = wanderEff²
+  sim.wx=a2*sim.wx+b2*s1*randn();
+  sim.wy=a2*sim.wy+b2*s1*randn();
+
+  const S=M.WST*M.WST+M.a*M.a;
+  const r2=sim.wx*sim.wx+sim.wy*sim.wy;
+  const pointing=Math.exp(-2*r2/S);
+  const norm=1/(1+2*M.wanderEff*M.wanderEff/S);
+  const lnI=-M.sln2/2+M.sln*sim.gs;
+  const lin=Math.exp(lnI)*pointing/norm;
+  const dB=M.PrxDBm+10*Math.log10(Math.max(lin,1e-9));
+
+  sim.prev=scope[NSCOPE-1];
+  scope.copyWithin(0,1);
+  scope[NSCOPE-1]=dB;
+  sim.n++; sim.tAcc+=dt;
+  if(dB<P.sensDBm)sim.below++;
+  if(sim.prev>=P.sensDBm&&dB<P.sensDBm)sim.cross++;
+  if(sim.n>200000){sim.n>>=1;sim.below>>=1;sim.cross/=2;sim.tAcc/=2;}
+  sim.t+=dt;
+}
+
+/* =================================================================== */
+/*  SPECKLE FIELD (frozen flow, correlation length = Fresnel scale)     */
+/* =================================================================== */
+const FN=128;
+let field=null, needField=true, fieldOffset=0;
+
+function boxBlurWrap(src,n,r){
+  const out=new Float32Array(n*n), tmp=new Float32Array(n*n), w=2*r+1;
+  for(let y=0;y<n;y++){let s=0;
+    for(let x=-r;x<=r;x++)s+=src[y*n+((x%n)+n)%n];
+    for(let x=0;x<n;x++){tmp[y*n+x]=s/w;
+      s-=src[y*n+((x-r)%n+n)%n]; s+=src[y*n+((x+r+1)%n+n)%n];}}
+  for(let x=0;x<n;x++){let s=0;
+    for(let y=-r;y<=r;y++)s+=tmp[(((y%n)+n)%n)*n+x];
+    for(let y=0;y<n;y++){out[y*n+x]=s/w;
+      s-=tmp[(((y-r)%n+n)%n)*n+x]; s+=tmp[(((y+r+1)%n+n)%n)*n+x];}}
+  return out;
+}
+function buildField(corrPx){
+  let f=new Float32Array(FN*FN);
+  for(let i=0;i<f.length;i++)f[i]=randn();
+  const r=Math.max(1,Math.min(Math.round(corrPx*0.55),FN/3|0));
+  for(let p=0;p<3;p++)f=boxBlurWrap(f,FN,r);
+  let m=0,v=0;
+  for(let i=0;i<f.length;i++)m+=f[i]; m/=f.length;
+  for(let i=0;i<f.length;i++)v+=(f[i]-m)*(f[i]-m); v=Math.sqrt(v/f.length)||1;
+  for(let i=0;i<f.length;i++)f[i]=(f[i]-m)/v;
+  return f;
+}
+function sampleField(x,y){
+  const xi=((x%FN)+FN)%FN, yi=((y%FN)+FN)%FN;
+  const x0=Math.floor(xi), y0=Math.floor(yi), fx=xi-x0, fy=yi-y0;
+  const x1=(x0+1)%FN, y1=(y0+1)%FN;
+  return field[y0*FN+x0]*(1-fx)*(1-fy)+field[y0*FN+x1]*fx*(1-fy)+
+         field[y1*FN+x0]*(1-fx)*fy+field[y1*FN+x1]*fx*fy;
+}
+
+/* =================================================================== */
+/*  EDDIES                                                             */
+/* =================================================================== */
+let eddies=[];
+function seedEddies(){
+  eddies=[];
+  for(let i=0;i<46;i++){
+    eddies.push({z:Math.random(), y:Math.random(), s:Math.pow(10,-0.5+Math.random()*1.2),
+                 a:.25+Math.random()*.75, p:Math.random()*6.28});
+  }
+}
+seedEddies();
+
+/* =================================================================== */
+/*  RENDER: THE SCENE                                                  */
+/* =================================================================== */
+const scene=document.getElementById('scene'), sctx=scene.getContext('2d');
+let stars=[];
+function seedStars(){stars=[];for(let i=0;i<70;i++)stars.push({x:Math.random(),y:Math.random()*.55,r:Math.random()*1.1+.2,a:.15+Math.random()*.5});}
+seedStars();
+
+function fitCanvas(cv){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  return {w,h,c,ok:w>20&&h>20};
+}
+
+function drawLens(c,x,halfH,thick,col,alpha){
+  c.save(); c.strokeStyle=col; c.globalAlpha=alpha; c.lineWidth=1.6;
+  c.beginPath();
+  c.moveTo(x-thick,0-halfH); c.quadraticCurveTo(x+thick*1.1,0,x-thick,halfH);
+  c.moveTo(x+thick,0-halfH); c.quadraticCurveTo(x-thick*1.1,0,x+thick,halfH);
+  c.stroke();
+  c.globalAlpha=alpha*.10; c.fillStyle=col;
+  c.beginPath();
+  c.moveTo(x-thick,-halfH); c.quadraticCurveTo(x+thick*1.1,0,x-thick,halfH);
+  c.lineTo(x+thick,halfH); c.quadraticCurveTo(x-thick*1.1,0,x+thick,-halfH);
+  c.closePath(); c.fill();
+  c.restore();
+}
+
+function drawScene(wallDt){
+  const {w,h,c,ok}=fitCanvas(scene);
+  if(!ok)return;
+  const mmPerPx=M.spanMM/h;
+  const yc=h*0.5;
+  const padL=Math.min(84,w*0.13), padR=Math.min(104,w*0.15);
+  const x0=padL, x1=w-padR, span=x1-x0;
+
+  // sky
+  const g=c.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#05080F'); g.addColorStop(.55,'#080D1A'); g.addColorStop(1,'#06090F');
+  c.fillStyle=g; c.fillRect(0,0,w,h);
+  c.save();
+  stars.forEach(s=>{c.globalAlpha=s.a*.5;c.fillStyle='#9FB4D8';
+    c.fillRect(s.x*w,s.y*h,s.r,s.r);});
+  c.restore();
+
+  // ---- air: eddies drifting with the wind (downward on screen) ----
+  const driftPx=P.v*1000/mmPerPx*P.timeScale*wallDt;  // px this frame
+  if(P.eddies){
+    c.save(); c.globalCompositeOperation='lighter';
+    const r0px=M.r0*1000/mmPerPx;
+    eddies.forEach(e=>{
+      e.y+=driftPx/h; if(e.y>1.3)e.y-=1.6; if(e.y<-0.3)e.y+=1.6;
+      const ex=x0+e.z*span, ey=e.y*h;
+      const R=Math.max(2,r0px*e.s);
+      const gr=c.createRadialGradient(ex,ey,0,ex,ey,R);
+      const warm=Math.sin(e.p+e.z*9)>0;
+      gr.addColorStop(0,warm?'rgba(47,179,201,0.085)':'rgba(120,90,220,0.075)');
+      gr.addColorStop(1,'rgba(0,0,0,0)');
+      c.fillStyle=gr; c.beginPath(); c.arc(ex,ey,R,0,6.2832); c.fill();
+      c.globalAlpha=.16; c.strokeStyle=warm?'rgba(47,179,201,.35)':'rgba(140,110,240,.3)';
+      c.lineWidth=.7; c.beginPath(); c.arc(ex,ey,R,0,6.2832); c.stroke(); c.globalAlpha=1;
+    });
+    c.restore();
+    // wind streaks
+    c.save(); c.strokeStyle='rgba(47,179,201,0.16)'; c.lineWidth=1;
+    for(let i=0;i<26;i++){
+      const sx=x0+((i*97)%span);
+      const sy=((sim.t*P.v*1000/mmPerPx*0.35)+i*53)%(h+60)-30;
+      c.beginPath(); c.moveTo(sx,sy); c.lineTo(sx,sy+14); c.stroke();
+    }
+    c.restore();
+  }
+
+  // ---- beam ----
+  const N=170;
+  const pts=[];
+  for(let i=0;i<=N;i++){
+    const f=i/N, z=f*M.L;
+    const Wd=M.W0*Math.sqrt(1+Math.pow(2*z/(M.k*M.W0*M.W0),2));
+    const extra=Math.max(M.WST*M.WST-Math.pow(M.W0*Math.sqrt(1+Math.pow(2*M.L/(M.k*M.W0*M.W0),2)),2),0);
+    const Wst=Math.sqrt(Wd*Wd+extra*Math.pow(f,3));
+    const cOff=sim.wy*Math.pow(f,1.5);
+    pts.push({x:x0+f*span, y:yc+cOff*1000/mmPerPx, r:Wst*1000/mmPerPx});
+  }
+  // long-term footprint
+  if(P.longterm){
+    c.save(); c.strokeStyle='rgba(255,179,71,0.32)'; c.setLineDash([4,4]); c.lineWidth=1;
+    c.beginPath();
+    for(let i=0;i<=N;i++){const f=i/N;
+      const Wd=M.W0*Math.sqrt(1+Math.pow(2*(f*M.L)/(M.k*M.W0*M.W0),2));
+      const extra=Math.max(M.WLTe*M.WLTe-Math.pow(M.W0*Math.sqrt(1+Math.pow(2*M.L/(M.k*M.W0*M.W0),2)),2),0);
+      const Wlt=Math.sqrt(Wd*Wd+extra*Math.pow(f,3))*1000/mmPerPx;
+      const px=x0+f*span; i?c.lineTo(px,yc-Wlt):c.moveTo(px,yc-Wlt);}
+    for(let i=N;i>=0;i--){const f=i/N;
+      const Wd=M.W0*Math.sqrt(1+Math.pow(2*(f*M.L)/(M.k*M.W0*M.W0),2));
+      const extra=Math.max(M.WLTe*M.WLTe-Math.pow(M.W0*Math.sqrt(1+Math.pow(2*M.L/(M.k*M.W0*M.W0),2)),2),0);
+      const Wlt=Math.sqrt(Wd*Wd+extra*Math.pow(f,3))*1000/mmPerPx;
+      const px=x0+f*span; c.lineTo(px,yc+Wlt);}
+    c.stroke(); c.setLineDash([]); c.restore();
+    // diffraction-only
+    c.save(); c.strokeStyle='rgba(122,84,39,0.55)'; c.setLineDash([2,5]); c.lineWidth=1;
+    c.beginPath();
+    for(let i=0;i<=N;i++){const f=i/N,z=f*M.L;
+      const Wd=M.W0*Math.sqrt(1+Math.pow(2*z/(M.k*M.W0*M.W0),2))*1000/mmPerPx;
+      const px=x0+f*span; i?c.lineTo(px,yc-Wd):c.moveTo(px,yc-Wd);}
+    c.stroke();
+    c.beginPath();
+    for(let i=0;i<=N;i++){const f=i/N,z=f*M.L;
+      const Wd=M.W0*Math.sqrt(1+Math.pow(2*z/(M.k*M.W0*M.W0),2))*1000/mmPerPx;
+      const px=x0+f*span; i?c.lineTo(px,yc+Wd):c.moveTo(px,yc+Wd);}
+    c.stroke(); c.setLineDash([]); c.restore();
+  }
+  // glowing beam body
+  c.save(); c.globalCompositeOperation='lighter';
+  const layers=[{k:1.0,a:.10,col:'255,122,61'},{k:.62,a:.16,col:'255,150,60'},
+                {k:.34,a:.24,col:'255,190,110'},{k:.14,a:.5,col:'255,232,190'}];
+  layers.forEach(Ly=>{
+    c.beginPath();
+    pts.forEach((p,i)=>{const y=p.y-p.r*Ly.k; i?c.lineTo(p.x,y):c.moveTo(p.x,y);});
+    for(let i=pts.length-1;i>=0;i--){const p=pts[i]; c.lineTo(p.x,p.y+p.r*Ly.k);}
+    c.closePath(); c.fillStyle=`rgba(${Ly.col},${Ly.a})`; c.fill();
+  });
+  c.restore();
+
+  // ---- heads ----
+  c.save(); c.translate(0,0);
+  // Tx
+  const wTx=M.W0*1000/mmPerPx;
+  c.save(); c.translate(x0,yc);
+  c.fillStyle='#0F1626'; c.strokeStyle='#33456B'; c.lineWidth=1;
+  c.beginPath(); c.rect(-46,-Math.max(wTx,16)-12,42,2*Math.max(wTx,16)+24); c.fill(); c.stroke();
+  drawLens(c,0,Math.max(wTx,8),5,'#7FD4E6',.95);
+  c.strokeStyle='rgba(255,179,71,.5)'; c.lineWidth=1;
+  for(let i=-2;i<=2;i++){c.beginPath();c.moveTo(-44,i*4);c.lineTo(-2,i*Math.max(wTx,8)/2.4);c.stroke();}
+  c.restore();
+  // Rx
+  const wRx=M.D/2*1000/mmPerPx;
+  c.save(); c.translate(x1,yc);
+  drawLens(c,0,Math.max(wRx,8),6,'#8FE3C4',.95);
+  c.strokeStyle='rgba(255,179,71,.55)'; c.lineWidth=1;
+  const fpt=44;
+  for(let i=-3;i<=3;i++){if(!i)continue;c.beginPath();
+    c.moveTo(3,i*Math.max(wRx,8)/3.2);c.lineTo(fpt,0);c.stroke();}
+  c.fillStyle='#0F1626'; c.strokeStyle='#33456B';
+  c.beginPath(); c.rect(fpt,-11,26,22); c.fill(); c.stroke();
+  c.fillStyle='#35D6A4'; c.beginPath(); c.arc(fpt+13,0,3.4,0,6.2832); c.fill();
+  c.restore();
+  c.restore();
+
+  // ---- labels ----
+  c.font='500 10px monospace';
+  c.fillStyle='#8595B4';
+  c.fillText('Tx  W₀ '+P.W0mm+' mm · '+M.divMrad.toFixed(2)+' mrad', 6, 16);
+  const rxLbl='Rx  D '+P.Dmm+' mm';
+  c.fillText(rxLbl, w-c.measureText(rxLbl).width-6, 16);
+  c.fillStyle='#55648A';
+  c.fillText(P.L+' m', x0+ (span/2) - 14, yc + h*0.40);
+
+  // transverse scale bar
+  const barMM=Math.pow(10,Math.round(Math.log10(M.spanMM/4)));
+  const barPx=barMM/mmPerPx;
+  c.strokeStyle='#55648A'; c.lineWidth=1;
+  c.beginPath(); c.moveTo(14,h-34); c.lineTo(14,h-34-barPx);
+  c.moveTo(10,h-34); c.lineTo(18,h-34); c.moveTo(10,h-34-barPx); c.lineTo(18,h-34-barPx);
+  c.stroke();
+  c.fillStyle='#55648A';
+  c.fillText((barMM>=1?barMM:barMM.toFixed(1))+' mm', 22, h-34-barPx/2+3);
+
+  // eddy legend
+  if(P.eddies){
+    const rl=Math.max(3,M.r0*1000/mmPerPx*0.5);
+    c.save(); c.globalAlpha=.5; c.strokeStyle='#2FB3C9'; c.setLineDash([2,2]);
+    c.beginPath(); c.arc(w-30,h-46,Math.min(rl,26),0,6.2832); c.stroke(); c.restore();
+    c.fillStyle='#3E7E8E';
+    const lb='r₀ '+(M.r0*100).toFixed(1)+' cm';
+    c.fillText(lb, w-30-c.measureText(lb).width/2, h-16);
+  }
+}
+
+/* =================================================================== */
+/*  RENDER: RECEIVER PLANE                                             */
+/* =================================================================== */
+const speckle=document.getElementById('speckle');
+let img=null, tmpCv=null;
+function drawSpeckle(wallDt){
+  const {w,h,c,ok}=fitCanvas(speckle);
+  if(!ok)return;
+  const nPix=FN;
+  if(!img||img.width!==nPix)img=c.createImageData(nPix,nPix);
+  const mmPerFieldPx=M.spanRxMM/nPix;
+  if(needField){field=buildField(M.rF*1000/mmPerFieldPx); needField=false;}
+  fieldOffset=(fieldOffset+P.v*1000/mmPerFieldPx*P.timeScale*wallDt)%FN;
+
+  const Wpx=M.WST*1000/mmPerFieldPx;
+  const cxPix=nPix/2+sim.wx*1000/mmPerFieldPx;
+  const cyPix=nPix/2+sim.wy*1000/mmPerFieldPx;
+  const d=img.data;
+  for(let y=0;y<nPix;y++){
+    for(let x=0;x<nPix;x++){
+      const g=sampleField(x+fieldOffset,y);
+      const lnI=-M.sln2/2+M.sln*g;
+      const dx=x-cxPix, dy=y-cyPix;
+      const env=Math.exp(-2*(dx*dx+dy*dy)/(Wpx*Wpx));
+      let I=Math.exp(lnI)*env;
+      const t=Math.min(1,Math.pow(I*1.25,0.55));
+      const i4=(y*nPix+x)*4;
+      d[i4]  =Math.min(255, 30+t*250);
+      d[i4+1]=Math.min(255, 12+t*t*205);
+      d[i4+2]=Math.min(255, 26+Math.pow(t,3.2)*170);
+      d[i4+3]=255;
+    }
+  }
+  c.imageSmoothingEnabled=true;
+  if(!tmpCv){tmpCv=document.createElement('canvas');tmpCv.width=nPix;tmpCv.height=nPix;}
+  const tmp=tmpCv;
+  tmp.getContext('2d').putImageData(img,0,0);
+  c.clearRect(0,0,w,h); c.drawImage(tmp,0,0,w,h);
+
+  const pxPerMM=w/M.spanRxMM;
+  // aperture
+  c.strokeStyle='#8FE3C4'; c.lineWidth=1.8;
+  c.beginPath(); c.arc(w/2,h/2,M.a*1000*pxPerMM,0,6.2832); c.stroke();
+  // long-term beam
+  c.strokeStyle='rgba(255,179,71,.65)'; c.setLineDash([4,4]); c.lineWidth=1;
+  c.beginPath(); c.arc(w/2,h/2,M.WLTe*1000*pxPerMM,0,6.2832); c.stroke(); c.setLineDash([]);
+  // instantaneous centroid
+  const ccx=w/2+sim.wx*1000*pxPerMM, ccy=h/2+sim.wy*1000*pxPerMM;
+  c.strokeStyle='#9B8CFF'; c.lineWidth=1;
+  c.beginPath(); c.moveTo(ccx-6,ccy); c.lineTo(ccx+6,ccy);
+  c.moveTo(ccx,ccy-6); c.lineTo(ccx,ccy+6); c.stroke();
+  // speckle scale bar
+  c.strokeStyle='rgba(255,255,255,.45)'; c.lineWidth=1.4;
+  const sp=M.rF*1000*pxPerMM;
+  c.beginPath(); c.moveTo(10,h-12); c.lineTo(10+sp,h-12); c.stroke();
+  c.fillStyle='rgba(255,255,255,.55)'; c.font='500 10px monospace';
+  c.fillText('√(λL) '+(M.rF*1000).toFixed(0)+' mm',10,h-18);
+}
+
+/* =================================================================== */
+/*  RENDER: SCOPE                                                      */
+/* =================================================================== */
+const scopeCv=document.getElementById('scope');
+function drawScope(){
+  const {w,h,c,ok}=fitCanvas(scopeCv);
+  if(!ok)return;
+  c.fillStyle='#04070E'; c.fillRect(0,0,w,h);
+  const top=M.PrxDBm+5, bot=Math.min(P.sensDBm-8,M.PrxDBm-24);
+  const Y=v=>(top-v)/(top-bot)*h;
+  c.strokeStyle='#1E2A44'; c.lineWidth=1; c.font='500 10px monospace';
+  for(let v=Math.ceil(bot/5)*5;v<=top;v+=5){
+    c.beginPath(); c.moveTo(0,Y(v)); c.lineTo(w,Y(v)); c.stroke();
+    c.fillStyle='#55648A'; c.fillText(v+'', 3, Y(v)-3);
+  }
+  c.fillStyle='rgba(255,71,111,.10)'; c.fillRect(0,Y(P.sensDBm),w,h-Y(P.sensDBm));
+  c.strokeStyle='#FF476F'; c.setLineDash([5,3]);
+  c.beginPath(); c.moveTo(0,Y(P.sensDBm)); c.lineTo(w,Y(P.sensDBm)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle='rgba(122,84,39,.9)'; c.setLineDash([2,4]);
+  c.beginPath(); c.moveTo(0,Y(M.PrxDBm)); c.lineTo(w,Y(M.PrxDBm)); c.stroke(); c.setLineDash([]);
+
+  c.strokeStyle='#FFB347'; c.lineWidth=1;
+  c.beginPath();
+  const step=Math.max(1,Math.floor(NSCOPE/(w*2)));
+  for(let i=0;i<NSCOPE;i+=step){
+    const px=i/(NSCOPE-1)*w, py=Y(scope[i]);
+    i?c.lineTo(px,py):c.moveTo(px,py);
+  }
+  c.stroke();
+  c.fillStyle='#55648A';
+  c.fillText(SCOPE_WINDOW.toFixed(1)+' s of link time',w-118,h-6);
+  c.fillStyle='#FF476F'; c.fillText('sensitivity',3,Y(P.sensDBm)+12);
+}
+
+/* =================================================================== */
+/*  RENDER: OUTAGE CURVE                                               */
+/* =================================================================== */
+const outCv=document.getElementById('outage');
+function drawOutage(){
+  const {w,h,c,ok}=fitCanvas(outCv);
+  if(!ok)return;
+  c.fillStyle='#04070E'; c.fillRect(0,0,w,h);
+  const padL=42,padB=20,padT=8,padR=8;
+  const X=m=>padL+(m/30)*(w-padL-padR);
+  const Y=p=>{const lo=-9,hi=0,l=Math.max(Math.log10(p),lo);return padT+(hi-l)/(hi-lo)*(h-padT-padB);};
+  c.strokeStyle='#1E2A44'; c.lineWidth=1; c.font='500 9.5px monospace'; c.fillStyle='#55648A';
+  for(let e=0;e>=-9;e-=3){
+    const y=Y(Math.pow(10,e));
+    c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();
+    c.fillText('1e'+e,3,y+3);
+  }
+  for(let m=0;m<=30;m+=10){
+    const x=X(m); c.beginPath();c.moveTo(x,padT);c.lineTo(x,h-padB);c.stroke();
+    c.fillText(m+' dB',x-8,h-6);
+  }
+  c.strokeStyle='#9B8CFF'; c.lineWidth=2; c.beginPath();
+  for(let m=0;m<=30;m+=.25){
+    const z=(m*Math.LN10/10-M.sln2/2)/M.sln;
+    const p=Math.max(.5*erfc(z/Math.SQRT2),1e-10);
+    const x=X(m),y=Y(p); m?c.lineTo(x,y):c.moveTo(x,y);
+  }
+  c.stroke();
+  const mx=X(Math.max(0,Math.min(30,M.margin)));
+  c.strokeStyle='#FFB347'; c.setLineDash([4,3]);
+  c.beginPath();c.moveTo(mx,padT);c.lineTo(mx,h-padB);c.stroke();c.setLineDash([]);
+  c.fillStyle='#FFB347'; c.fillText('you',mx+3,padT+10);
+}
+
+/* =================================================================== */
+/*  RENDER: DISTURBANCE REJECTION                                      */
+/* =================================================================== */
+const rejCv=document.getElementById('reject');
+function drawReject(){
+  const {w,h,c,ok}=fitCanvas(rejCv); if(!ok)return;
+  const t=M.trk;
+  c.fillStyle='#04070E'; c.fillRect(0,0,w,h);
+  const padL=40,padB=22,padT=8,padR=8;
+  const f0=Math.max(t.fk/2000,0.01), f1=Math.max(t.fk,t.fs)*20;
+  const lx0=Math.log10(f0), lx1=Math.log10(f1);
+  const X=f=>padL+(Math.log10(f)-lx0)/(lx1-lx0)*(w-padL-padR);
+  const dbTop=6, dbBot=-72;
+  const Y=db=>padT+(dbTop-db)/(dbTop-dbBot)*(h-padT-padB);
+  const ref=Math.max(t.peak,1e-30);
+  const toDB=v=>10*Math.log10(Math.max(v,1e-30)/ref);
+
+  // region above Nyquist: the loop cannot see any of this
+  if(P.trkOn){
+    const xn=X(t.fs/2);
+    if(xn<w-padR){c.fillStyle='rgba(255,71,111,0.07)';c.fillRect(xn,padT,w-padR-xn,h-padT-padB);}
+  }
+  c.strokeStyle='#1E2A44'; c.lineWidth=1; c.font='500 9.5px monospace'; c.fillStyle='#55648A';
+  for(let db=0;db>=-70;db-=20){const y=Y(db);
+    c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();
+    c.fillText(db+'',3,y+3);}
+  for(let e=Math.ceil(lx0);e<=Math.floor(lx1);e++){
+    const x=X(Math.pow(10,e));
+    c.beginPath();c.moveTo(x,padT);c.lineTo(x,h-padB);c.stroke();
+    const lab=Math.pow(10,e)>=1000?(Math.pow(10,e)/1000)+'k':String(Math.pow(10,e));
+    c.fillText(lab,x-6,h-8);}
+  c.fillText('Hz',w-padR-16,h-8);
+
+  const curve=(arr,col,wid)=>{
+    c.strokeStyle=col;c.lineWidth=wid;c.beginPath();let started=false;
+    arr.forEach(([f,v])=>{ if(f<f0||f>f1)return;
+      const x=X(f),y=Y(toDB(v)); if(!started){c.moveTo(x,y);started=true;}else c.lineTo(x,y);});
+    c.stroke();
+  };
+  curve(t.curveD,'#2FB3C9',1.6);
+  if(P.trkOn)curve(t.curveR,'#9B8CFF',2);
+
+  const vline=(f,col,lab)=>{
+    if(f<f0||f>f1)return;
+    const x=X(f); c.strokeStyle=col;c.setLineDash([4,3]);c.lineWidth=1;
+    c.beginPath();c.moveTo(x,padT);c.lineTo(x,h-padB);c.stroke();c.setLineDash([]);
+    c.fillStyle=col;c.fillText(lab,x+3,padT+9);
+  };
+  vline(t.fk,'#3E7E8E','knee');
+  if(P.trkOn){vline(t.bw,'#FFB347','bw'); vline(t.fs/2,'#FF476F','Nyq');}
+}
+
+/* =================================================================== */
+/*  RENDER: FADE HISTOGRAM                                             */
+/* =================================================================== */
+const histCv=document.getElementById('hist');
+function drawHist(){
+  const {w,h,c,ok}=fitCanvas(histCv); if(!ok)return;
+  c.fillStyle='#04070E'; c.fillRect(0,0,w,h);
+  const padL=8,padR=8,padB=18,padT=6;
+  const lo=Math.min(P.sensDBm-6,M.PrxDBm-20), hi=M.PrxDBm+7;
+  const NB=52, bins=new Float64Array(NB);
+  for(let i=0;i<NSCOPE;i++){
+    const b=Math.floor((scope[i]-lo)/(hi-lo)*NB);
+    if(b>=0&&b<NB)bins[b]++;
+  }
+  let mx=0; for(let i=0;i<NB;i++)mx=Math.max(mx,bins[i]);
+  const X=db=>padL+(db-lo)/(hi-lo)*(w-padL-padR);
+  const bw=(w-padL-padR)/NB;
+  c.fillStyle='rgba(255,71,111,0.10)';
+  c.fillRect(padL,padT,Math.max(X(P.sensDBm)-padL,0),h-padT-padB);
+  for(let i=0;i<NB;i++){
+    if(!bins[i])continue;
+    const hgt=bins[i]/mx*(h-padT-padB);
+    const db=lo+(i+.5)/NB*(hi-lo);
+    c.fillStyle=db<P.sensDBm?'rgba(255,71,111,.85)':'rgba(255,179,71,.7)';
+    c.fillRect(X(lo+i/NB*(hi-lo)),h-padB-hgt,Math.max(bw-1,1),hgt);
+  }
+  // pure lognormal, which in dB is a Gaussian — the gap is the pointing term
+  const sdB=10*M.sln/Math.LN10, mu=M.PrxDBm-10*M.sln2/(2*Math.LN10);
+  c.strokeStyle='#9B8CFF'; c.lineWidth=1.6; c.beginPath();
+  const binW=(hi-lo)/NB;
+  for(let i=0;i<=200;i++){
+    const db=lo+(i/200)*(hi-lo);
+    const pdf=Math.exp(-Math.pow(db-mu,2)/(2*sdB*sdB))/(sdB*Math.sqrt(2*Math.PI));
+    const cnt=pdf*binW*NSCOPE;
+    const y=h-padB-cnt/mx*(h-padT-padB);
+    i?c.lineTo(X(db),Math.max(y,padT)):c.moveTo(X(db),Math.max(y,padT));
+  }
+  c.stroke();
+  c.strokeStyle='#FF476F'; c.setLineDash([4,3]); c.lineWidth=1;
+  c.beginPath(); c.moveTo(X(P.sensDBm),padT); c.lineTo(X(P.sensDBm),h-padB); c.stroke(); c.setLineDash([]);
+  c.fillStyle='#55648A'; c.font='500 9.5px monospace';
+  c.fillText(lo.toFixed(0)+' dBm',padL,h-5);
+  c.fillText(hi.toFixed(0),w-padR-24,h-5);
+}
+
+/* =================================================================== */
+/*  RENDER: DIURNAL STRIP                                              */
+/* =================================================================== */
+const dayCv=document.getElementById('day');
+function drawDay(){
+  const {w,h,c,ok}=fitCanvas(dayCv); if(!ok)return;
+  c.fillStyle='#04070E'; c.fillRect(0,0,w,h);
+  const padL=30,padR=8,padT=6,padB=16;
+  const X=hr=>padL+hr/24*(w-padL-padR);
+  const Y=lc=>padT+(-12.4-lc)/(-12.4+17)*(h-padT-padB);
+  // daylight band
+  c.fillStyle='rgba(255,179,71,0.05)';
+  c.fillRect(X(6),padT,X(18.5)-X(6),h-padT-padB);
+  c.strokeStyle='#1E2A44'; c.lineWidth=1; c.font='500 9px monospace'; c.fillStyle='#55648A';
+  for(let e=-17;e<=-13;e++){const y=Y(e);
+    c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();c.fillText('1e'+e,2,y+3);}
+  for(let hr=0;hr<=24;hr+=6){const x=X(hr);
+    c.beginPath();c.moveTo(x,padT);c.lineTo(x,h-padB);c.stroke();
+    c.fillText(String(hr).padStart(2,'0')+':00',x-11,h-5);}
+  c.strokeStyle='#FFB347'; c.lineWidth=1.8; c.beginPath();
+  for(let i=0;i<=192;i++){const hr=i/8, y=Y(cn2Diurnal(hr));
+    i?c.lineTo(X(hr),y):c.moveTo(X(hr),y);}
+  c.stroke();
+  const x=X(P.hour);
+  c.strokeStyle=P.daySweep?'#35D6A4':'#55648A'; c.lineWidth=1.4;
+  c.beginPath();c.moveTo(x,padT);c.lineTo(x,h-padB);c.stroke();
+  c.fillStyle=P.daySweep?'#35D6A4':'#8595B4';
+  c.beginPath();c.arc(x,Y(cn2Diurnal(P.hour)),3.2,0,6.2832);c.fill();
+}
+
+/* =================================================================== */
+/*  METRICS                                                            */
+/* =================================================================== */
+function met(k,v,u,s,col){
+  return `<div class="met"><div class="k">${k}</div>
+    <div class="v" style="color:${col||'var(--text)'}">${v}<small>${u||''}</small></div>
+    ${s?`<div class="s">${s}</div>`:''}</div>`;
+}
+let lastUI=0;
+function refresh(){
+  refreshControlValues();
+  document.getElementById('mAir').innerHTML=
+    met('Fried r₀',(M.r0*100).toFixed(1),'cm','coherence patch in the air')+
+    met('Rytov σ²R',M.sigR2.toFixed(2),'',M.regime,M.regColor)+
+    met('Fresnel scale',(M.rF*1000).toFixed(0),'mm','speckle grain at the Rx')+
+    met('Scint. bandwidth',M.nu0.toFixed(0),'Hz','v / √(λL)','var(--model)');
+
+  const ratio=M.r0/(2*M.WLT);
+  document.getElementById('airNote').innerHTML = ratio>1
+    ? `r₀ is <b style="color:var(--ok)">larger</b> than the beam — the wavefront stays mostly flat across it, so turbulence shows up as <b style="color:var(--beam)">tilt</b>. A tracking loop can chase this.`
+    : `r₀ is <b style="color:var(--alarm)">smaller</b> than the beam — the wavefront breaks into independent patches, so the beam <b style="color:var(--alarm)">shatters</b> into speckle. No gimbal fixes this; you need aperture or diversity.`;
+
+  document.getElementById('mBudget').innerHTML=
+    met('Mean Rx',M.PrxDBm.toFixed(1),'dBm',`geo ${M.geoDB.toFixed(1)} · air ${M.atmDB.toFixed(1)} dB`)+
+    met('Mean margin',M.margin.toFixed(1),'dB','before turbulence',M.margin>0?'var(--ok)':'var(--alarm)')+
+    met('σ²I point',M.sigI2pt.toFixed(3),'','a bare photodiode')+
+    met('σ²I aperture',M.sigI2.toFixed(3),'',`averaging gain ${(1/M.A).toFixed(1)}×`,'var(--model)')+
+    met('Outage',M.outage<1e-9?'&lt;1e-9':M.outage.toExponential(1),'','time below sensitivity',
+        M.outage>1e-6?'var(--alarm)':'var(--ok)')+
+    met('Mean fade',M.down?'down':(M.meanFade>0?(M.meanFade*1e3).toFixed(2):'—'),M.down?'':'ms',
+        M.down?'mean level sits below sensitivity':`${M.fadeRate.toFixed(1)} fades/s`,
+        M.down?'var(--alarm)':'var(--text)');
+
+  document.getElementById('speckleLegend').innerHTML=
+    `<div><i style="color:#8FE3C4">──</i>aperture ${P.Dmm} mm · spans ${(M.D/M.rF).toFixed(1)} speckle cells</div>
+     <div><i style="color:#FFB347">- -</i>long-term beam ${(M.WLT*1000).toFixed(0)} mm radius</div>
+     <div><i style="color:#9B8CFF">╬</i>instantaneous centroid · wander 1σ ${(M.wander*1000).toFixed(1)} mm</div>`;
+
+  const bits=M.burstBits;
+  document.getElementById('burst').innerHTML = M.down
+    ? `The mean received level is <b>below sensitivity</b>. This is not a fade problem any more — no amount of coding or interleaving recovers a link that is down on average. Buy aperture, power, or a shorter path.`
+    : `A mean fade at ${P.rateGbps} Gbps swallows <b>${bits>1e6?(bits/1e6).toFixed(2)+' Mbit':(bits/1e3).toFixed(1)+' kbit'}</b>. That is your interleaver depth — in memory you have to buy.`;
+
+  // ---- tracking ----
+  const t=M.trk;
+  document.getElementById('mTrack').innerHTML=
+    met('Disturbance',(t.sigD*1e6).toFixed(1),'µrad','beam wander, per axis','var(--air)')+
+    met('Residual',(t.sigR*1e6).toFixed(1),'µrad',P.trkOn?'after the loop':'loop open',
+        P.trkOn&&t.rejDB>1?'var(--ok)':(t.rejDB<-0.5?'var(--alarm)':'var(--model)'))+
+    met('Rejection',(t.rejDB>=0?'+':'')+t.rejDB.toFixed(1),'dB',
+        `bw ${t.bw.toFixed(2)} Hz · PM ${t.pm.toFixed(0)}°`,
+        t.rejDB>3?'var(--ok)':(t.rejDB<-0.5?'var(--alarm)':'var(--text)'))+
+    met('Above Nyquist',(t.aliasFrac*100).toFixed(0),'%','of disturbance power',
+        t.aliasFrac>0.25?'var(--alarm)':'var(--text)')+
+    met('Wander at Rx',(M.wanderEff*1000).toFixed(1),'mm',`open loop ${(M.wander*1000).toFixed(1)} mm`)+
+    met('Link gain',(M.trackGainDB>=0?'+':'')+M.trackGainDB.toFixed(2),'dB','what the loop buys you',
+        M.trackGainDB>0.2?'var(--ok)':'var(--faint)');
+
+  const notes=[];
+  if(!P.trkOn){
+    notes.push(`Loop open. All ${(M.wander*1000).toFixed(0)} mm of wander lands on the receiver.`);
+  }else{
+    if(t.aliasFrac>0.25)
+      notes.push(`<b>${(t.aliasFrac*100).toFixed(0)}%</b> of the disturbance sits above your Nyquist frequency of ${(t.fs/2).toFixed(1)} Hz. The loop cannot see it, cannot reject it, and folds it back into the control band as apparent low-frequency error. Raise the frame rate before touching any gain.`);
+    if(t.clamped)
+      notes.push(`Bandwidth clamped to ${t.bwMax.toFixed(2)} Hz by ${(t.tau*1e3).toFixed(1)} ms of loop delay — ${P.trkLat} frame${P.trkLat===1?'':'s'} plus the half-sample hold. Latency, not gain, is what limits you here.`);
+    if(t.rejDB<-0.3)
+      notes.push(`The loop is making it <b>worse</b>. The disturbance knee sits at ${t.fk.toFixed(0)} Hz, well above what this loop can reach, so the sensitivity peak near crossover injects more than the integrator removes. Classic waterbed.`);
+    else if(t.rejDB<2)
+      notes.push(`Only ${t.rejDB.toFixed(1)} dB of rejection. This loop is doing essentially nothing.`);
+  }
+  if(M.trackGainDB<0.15&&M.wander<0.25*M.WLTe)
+    notes.push(`Wander is only ${(M.wander/M.WLTe*100).toFixed(0)}% of the beam radius, so pointing is not what is costing you power — no tracker will help. Tighten the beam (raise W₀) before the loop is worth building.`);
+  document.getElementById('trackNote').innerHTML=notes.join('<br><br>')||
+    `Clean rejection. Residual jitter is ${(t.sigR*1e6).toFixed(1)} µrad against a ${(M.divMrad*1000/2).toFixed(0)} µrad beam half-angle.`;
+
+  document.getElementById('rejectLegend').innerHTML=
+    `<div><i style="color:#2FB3C9">──</i>disturbance PSD · Tyler tilt spectrum, knee at ${t.fk.toFixed(0)} Hz</div>`+
+    (P.trkOn?`<div><i style="color:#9B8CFF">──</i>residual after the loop · shaded band is above Nyquist</div>`:
+             `<div style="color:var(--faint)">loop open — nothing is being rejected</div>`);
+
+  // ---- weather ----
+  const a1550=kimAlpha(P.visKm,1550,P.wxType), a850=kimAlpha(P.visKm,850,P.wxType);
+  const aNow=kimAlpha(P.visKm,P.lambdaNm,P.wxType);
+  document.getElementById('mWx').innerHTML=
+    met('At 850 nm',a850.toFixed(1),'dB/km','')+
+    met('At 1550 nm',a1550.toFixed(1),'dB/km','','var(--beam)')+
+    met('Your λ',aNow.toFixed(1),'dB/km',`over ${(P.L/1000).toFixed(2)} km = ${(aNow*P.L/1000).toFixed(1)} dB`,
+        P.useVis?'var(--ok)':'var(--faint)')+
+    met('Path loss',(aNow*P.L/1000).toFixed(1),'dB',P.useVis?'driving the budget':'not applied');
+  const q=kimQ(P.visKm,P.wxType);
+  document.getElementById('wxNote').innerHTML = P.wxType==='dust'
+    ? `Dust particles are tens of microns across — far larger than either wavelength — so scattering is <b style="color:var(--alarm)">non-selective</b> and the exponent q goes to zero. 1550 nm buys you nothing over 850 nm. This is the opposite of the fog case, and it is the one that matters in the Gulf.`
+    : `Kim exponent q = ${q.toFixed(2)}. Longer wavelengths scatter less while the droplets stay comparable to λ, which is why 1550 nm wins by ${(a850-a1550).toFixed(1)} dB/km here. That advantage collapses to zero once visibility drops below 500 m and the droplets outgrow both wavelengths.`;
+
+  document.getElementById('histLegend').innerHTML=
+    `<div><i style="color:#FFB347">▇</i>measured, from the live trace &nbsp;<i style="color:#9B8CFF">──</i>pure lognormal</div>
+     <div style="color:var(--faint)">Weight below the red line is outage. Where the bars sit left of the curve, pointing error is doing it — lognormal only knows about scintillation.</div>`;
+
+  document.getElementById('dayLegend').innerHTML=
+    `<div>${String(Math.floor(P.hour)).padStart(2,'0')}:${String(Math.floor(P.hour%1*60)).padStart(2,'0')} · Cn² ${Math.pow(10,cn2Diurnal(P.hour)).toExponential(1)} · wind ${windDiurnal(P.hour).toFixed(1)} m/s</div>
+     <div style="color:var(--faint)">The two dips are the neutral events at sunrise and sunset, when the surface heat flux crosses zero. Best seeing of the day, and the reason field campaigns start early.</div>`;
+
+  drawReject();
+  document.getElementById('scaleNote').textContent=
+    `transverse ${M.spanMM.toFixed(0)} mm true scale · longitudinal ${P.L} m compressed`;
+  document.getElementById('speedNote').textContent=
+    `time 1/${Math.round(1/P.timeScale)}`;
+  document.getElementById('regimeNote').innerHTML=
+    `<span class="badge" style="color:${M.regColor}">${M.regime} turbulence</span>`;
+
+  drawOutage();
+}
+
+/* =================================================================== */
+/*  LOOP                                                               */
+/* =================================================================== */
+let last=performance.now(), acc=0, lastField=0;
+function loop(now){
+  const wallDt=Math.min((now-last)/1000,0.05); last=now;
+  if(P.running){
+    acc+=wallDt*P.timeScale;
+    let steps=0;
+    while(acc>=DT&&steps<600){stepSim(DT);acc-=DT;steps++;}
+  }
+  if(P.daySweep&&P.running){
+    P.hour=(P.hour+wallDt*(24/45))%24;          // a full day in 45 seconds
+    P.logCn2=cn2Diurnal(P.hour); P.v=windDiurnal(P.hour);
+    const a=document.getElementById('s_logCn2'), b=document.getElementById('s_v');
+    if(a)a.value=P.logCn2; if(b)b.value=P.v;
+    M=model();
+    if(now-lastField>400){lastField=now;needField=true;}
+    if(now-lastUI>120)refresh();
+  }
+  drawScene(P.running?wallDt:0);
+  drawSpeckle(P.running?wallDt:0);
+  drawScope();
+  drawHist();
+  drawDay();
+  if(now-lastUI>120){
+    lastUI=now;
+    const measOut=sim.n?sim.below/sim.n:0;
+    const measRate=sim.tAcc>0.4?sim.cross/sim.tAcc:null;
+    document.getElementById('scopeLegend').innerHTML=
+      `<div>measured outage <span style="color:var(--beam)">${(measOut*100).toFixed(2)}%</span>
+        &nbsp;·&nbsp; predicted <span style="color:var(--model)">${(M.outage*100).toFixed(2)}%</span></div>
+       <div>measured fades <span style="color:var(--beam)">${measRate!==null?measRate.toFixed(1):'—'}</span>/s
+        &nbsp;·&nbsp; predicted <span style="color:var(--model)">${M.fadeRate.toFixed(1)}</span>/s</div>`;
+  }
+  requestAnimationFrame(loop);
+}
+
+/* =================================================================== */
+/*  BOOT                                                               */
+/* =================================================================== */
+decodeConfig(location.hash);
+buildControls(); buildPresets(); M=model(); refresh();
+
+/* segmented controls */
+function seg(id,key,cast){
+  const host=document.getElementById(id);
+  [...host.children].forEach(b=>{
+    if(String(P[key])===b.dataset.v)b.classList.add('on');else b.classList.remove('on');
+    b.onclick=()=>{
+      P[key]=cast?cast(b.dataset.v):b.dataset.v;
+      [...host.children].forEach(x=>x.classList.remove('on')); b.classList.add('on');
+      M=model(); needField=true; refresh();
+    };
+  });
+}
+seg('trkSeg','trkOn',v=>+v);
+seg('wxSeg','wxType');
+
+/* tools */
+const tools=document.getElementById('tools');
+function tool(label,fn,cls){
+  const b=document.createElement('button'); b.className='chip '+(cls||''); b.textContent=label;
+  b.onclick=()=>fn(b); tools.appendChild(b); return b;
+}
+tool('optimise loop',()=>{P.trkBw=bestBandwidth();
+  const el=document.getElementById('s_trkBw'); if(el)el.value=Math.log10(P.trkBw);
+  M=model(); refresh();});
+tool('tight beam + tracking',()=>{
+  Object.assign(P,{W0mm:25,Dmm:80,trkOn:1,trkFs:500,trkLat:1,logCn2:-13.2,v:4});
+  P.trkBw=bestBandwidth();
+  ['W0mm','Dmm','logCn2','v'].forEach(k=>{const e=document.getElementById('s_'+k);if(e)e.value=P[k];});
+  const bw=document.getElementById('s_trkBw'); if(bw)bw.value=Math.log10(P.trkBw);
+  const fsq=document.getElementById('s_trkFs'); if(fsq)fsq.value=Math.log10(P.trkFs);
+  [...document.getElementById('trkSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.v==='1'));
+  M=model(); needField=true; refresh();
+});
+tool('export 30 s log',b=>{const old=b.textContent; b.textContent='generating…';
+  setTimeout(()=>{download('fso_rx_power.csv',synthLog(30));b.textContent=old;},30);});
+tool('copy link',b=>{
+  const url=location.origin+location.pathname+'#'+encodeConfig();
+  history.replaceState(null,'','#'+encodeConfig());
+  const done=()=>{const o=b.textContent;b.textContent='copied';setTimeout(()=>b.textContent=o,1200);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done,done);
+  else done();
+});
+
+/* visibility drive */
+const bVis=document.getElementById('btnVis');
+bVis.classList.toggle('on',P.useVis);
+bVis.onclick=()=>{P.useVis=!P.useVis; bVis.classList.toggle('on',P.useVis); M=model(); refresh();};
+
+document.getElementById('btnDay').onclick=e=>{
+  P.daySweep=!P.daySweep; e.target.classList.toggle('on',P.daySweep);
+  if(!P.daySweep){M=model();refresh();}
+};
+document.getElementById('btnRun').onclick=e=>{P.running=!P.running;
+  e.target.classList.toggle('on',P.running); e.target.textContent=P.running?'running':'paused';};
+document.getElementById('btnEddy').onclick=e=>{P.eddies=!P.eddies;e.target.classList.toggle('on',P.eddies);};
+document.getElementById('btnLT').onclick=e=>{P.longterm=!P.longterm;e.target.classList.toggle('on',P.longterm);};
+window.addEventListener('resize',()=>{seedStars();refresh();});
+if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+  P.running=false;
+  const b=document.getElementById('btnRun'); b.classList.remove('on'); b.textContent='paused';
+}
+scope.fill(M.PrxDBm);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

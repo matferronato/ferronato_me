@@ -1,0 +1,2664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal Chain Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --chassis:#0E1216;
+  --panel:#161D24;
+  --panel-2:#1D262F;
+  --rail:#2A3742;
+  --rail-hi:#3A4A58;
+  --screen:#070B0F;
+  --ink:#CBD7E1;
+  --ink-dim:#7E8F9E;
+  --ink-faint:#4E5D6A;
+  --amber:#F2A93B;
+  --ch1:#F2A93B; --ch2:#4FC9E4; --ch3:#E86FA6; --ch4:#9C8CFF;
+  --ch5:#7ED396; --ch6:#E4573C; --ch7:#C9D4DE; --ch8:#5AA9E6;
+  --warn:#E4573C; --ok:#7ED396;
+  --f-disp:'IBM Plex Sans Condensed',ui-sans-serif,system-ui,sans-serif;
+  --f-body:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+  --f-data:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --r:3px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--chassis);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:13px;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button,input,select{font-family:inherit;color:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:var(--chassis)}
+::-webkit-scrollbar-thumb{background:var(--rail);border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:var(--rail-hi)}
+
+.app{
+  display:grid;
+  height:100vh;
+  grid-template-columns:344px minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"head head" "rail main" "foot foot";
+}
+
+/* ---------- masthead ---------- */
+.masthead{
+  grid-area:head;display:flex;align-items:center;gap:18px;
+  padding:0 14px;height:52px;
+  background:linear-gradient(180deg,#1B242C,#141B21);
+  border-bottom:1px solid #000;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset;
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.mark{
+  width:26px;height:26px;flex:0 0 26px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#F7C46B,#B8791C 60%,#5C3B08);
+  box-shadow:0 0 12px rgba(242,169,59,.45), 0 0 0 1px #000;
+}
+.brand h1{
+  font-family:var(--f-disp);font-size:16px;letter-spacing:.14em;
+  margin:0;font-weight:700;text-transform:uppercase;white-space:nowrap;
+}
+.brand .sub{
+  margin:0;font-family:var(--f-data);font-size:9.5px;letter-spacing:.22em;
+  color:var(--ink-faint);text-transform:uppercase;
+}
+.globals{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap}
+.gfield{display:flex;flex-direction:column;gap:2px}
+.gfield>span{font-family:var(--f-data);font-size:8.5px;letter-spacing:.16em;color:var(--ink-faint);text-transform:uppercase}
+
+/* ---------- generic controls ---------- */
+select,input[type=text],input[type=number]{
+  background:var(--screen);border:1px solid var(--rail);border-radius:var(--r);
+  padding:4px 6px;font-family:var(--f-data);font-size:11.5px;
+  outline:none;
+}
+select:focus-visible,input:focus-visible,button:focus-visible{
+  outline:2px solid var(--amber);outline-offset:1px;
+}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.btn{
+  background:linear-gradient(180deg,var(--panel-2),#151C23);
+  border:1px solid var(--rail);border-radius:var(--r);
+  padding:5px 10px;font-family:var(--f-disp);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;cursor:pointer;font-weight:600;
+}
+.btn:hover{border-color:var(--rail-hi);background:linear-gradient(180deg,#26313B,#1A2229)}
+.btn.on{background:linear-gradient(180deg,#5A3E12,#3A280C);border-color:#8A6420;color:#FFD79A}
+.btn.sm{padding:3px 7px;font-size:10px}
+.btn.icon{padding:3px 6px;font-family:var(--f-data);letter-spacing:0}
+.led{
+  width:8px;height:8px;border-radius:50%;background:#0A0F14;
+  box-shadow:0 0 0 1px #000 inset;flex:0 0 8px;
+}
+.led.on{box-shadow:0 0 0 1px #000 inset,0 0 7px currentColor;background:currentColor}
+
+/* ---------- chain rail (signature) ---------- */
+.rail-col{
+  grid-area:rail;background:var(--panel);border-right:1px solid #000;
+  display:flex;flex-direction:column;min-height:0;
+}
+.rail-head{
+  display:flex;align-items:center;gap:8px;padding:9px 12px;
+  border-bottom:1px solid var(--rail);background:var(--panel-2);
+}
+.rail-head h2{
+  font-family:var(--f-disp);font-size:12px;letter-spacing:.18em;margin:0;
+  text-transform:uppercase;color:var(--ink)
+}
+.rail-head .count{font-family:var(--f-data);font-size:10px;color:var(--ink-faint)}
+.chain{
+  list-style:none;margin:0;padding:10px 12px 14px 12px;overflow-y:auto;flex:1;
+  position:relative;
+}
+/* the spine: a physical signal path down the rail */
+.chain::before{
+  content:'';position:absolute;left:23px;top:24px;bottom:34px;width:2px;
+  background:linear-gradient(180deg,var(--rail-hi),var(--rail) 60%,transparent);
+}
+.stage{position:relative;padding-left:24px;margin-bottom:9px}
+.stage::before{ /* node on the spine */
+  content:'';position:absolute;left:7px;top:15px;width:10px;height:10px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--rail-hi);z-index:1;
+}
+.stage.live::before{border-color:var(--amber);box-shadow:0 0 8px rgba(242,169,59,.6)}
+.stage.bypassed{opacity:.45}
+.card{
+  background:linear-gradient(180deg,#1D262F,#171F26);
+  border:1px solid var(--rail);border-radius:var(--r);
+}
+.card-head{
+  display:flex;align-items:center;gap:7px;padding:6px 8px;cursor:pointer;
+  border-bottom:1px solid transparent;
+}
+.card.open .card-head{border-bottom-color:var(--rail)}
+.card-head .kind{
+  font-family:var(--f-disp);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:700;
+}
+.card-head .tag{
+  font-family:var(--f-data);font-size:9.5px;color:var(--ink-dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;
+}
+.card-head .idx{
+  font-family:var(--f-data);font-size:9px;color:var(--ink-faint);
+  border:1px solid var(--rail);border-radius:2px;padding:0 3px;
+}
+.spark{display:block;width:100%;height:26px;background:var(--screen);border-top:1px solid var(--rail)}
+.card-body{padding:8px;display:none;border-top:1px solid var(--rail)}
+.card.open .card-body{display:block}
+.card-tools{display:flex;gap:3px;margin-left:auto;align-items:center}
+
+/* parameter fields */
+.f{margin-bottom:7px}
+.f-lab{
+  display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:2px;
+}
+.f-lab span{font-family:var(--f-data);font-size:9.5px;letter-spacing:.11em;color:var(--ink-dim);text-transform:uppercase}
+.f-lab input{width:88px;text-align:right;padding:2px 4px;font-size:11px}
+.f-row{display:flex;gap:6px}
+.f-row>*{flex:1;min-width:0}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:16px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:3px;background:var(--screen);border:1px solid var(--rail);border-radius:2px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:11px;height:14px;margin-top:-6.5px;border-radius:2px;
+  background:linear-gradient(180deg,#8DA0B0,#4C5C6A);border:1px solid #0A0F14;
+}
+input[type=range]:hover::-webkit-slider-thumb{background:linear-gradient(180deg,#F7C46B,#B8791C)}
+input[type=range]::-moz-range-track{height:3px;background:var(--screen);border:1px solid var(--rail)}
+input[type=range]::-moz-range-thumb{width:11px;height:14px;border-radius:2px;background:#8DA0B0;border:1px solid #0A0F14}
+.note{font-family:var(--f-data);font-size:9.5px;color:var(--ink-faint);line-height:1.45;margin:4px 0 0}
+.note b{color:var(--ink-dim);font-weight:500}
+.chk{display:flex;align-items:center;gap:6px;font-family:var(--f-data);font-size:10.5px;color:var(--ink-dim);margin:5px 0;cursor:pointer}
+.chk input{accent-color:var(--amber)}
+.add-zone{padding:0 12px 12px 36px}
+.add-zone select{width:100%}
+
+/* ---------- main panes ---------- */
+.main{grid-area:main;display:grid;grid-template-rows:minmax(0,1.15fr) minmax(0,1fr);min-width:0;min-height:0}
+.panel{display:flex;flex-direction:column;min-height:0;border-bottom:1px solid #000;background:var(--panel)}
+.panel:last-child{border-bottom:none}
+.panel-head{
+  display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--panel-2);
+  border-bottom:1px solid var(--rail);flex-wrap:wrap;
+}
+.panel-head h2{
+  font-family:var(--f-disp);font-size:11.5px;letter-spacing:.18em;margin:0;text-transform:uppercase;
+}
+.screen-wrap{position:relative;flex:1;min-height:0;background:var(--screen);margin:0;overflow:hidden}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.ctl-bar{
+  display:flex;gap:12px;align-items:center;padding:6px 10px;background:var(--panel);
+  border-top:1px solid var(--rail);flex-wrap:wrap;
+}
+.ctl{display:flex;align-items:center;gap:6px}
+.ctl>label{font-family:var(--f-data);font-size:9px;letter-spacing:.14em;color:var(--ink-faint);text-transform:uppercase}
+.ctl input[type=range]{width:104px}
+.ctl .val{font-family:var(--f-data);font-size:10.5px;color:var(--ink);min-width:62px}
+.tabs{display:flex;gap:0;margin-left:auto}
+.tab{
+  background:transparent;border:1px solid var(--rail);border-right:none;padding:4px 11px;
+  font-family:var(--f-disp);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  color:var(--ink-dim);font-weight:600;
+}
+.tab:last-child{border-right:1px solid var(--rail)}
+.tab.on{background:#3A280C;border-color:#8A6420;color:#FFD79A}
+.pane{display:none;flex:1;min-height:0;flex-direction:column}
+.pane.on{display:flex}
+
+/* ---------- footer measurements ---------- */
+.meas{
+  grid-area:foot;display:flex;gap:0;overflow-x:auto;background:#111820;
+  border-top:1px solid #000;min-height:54px;
+}
+.mcard{
+  border-right:1px solid var(--rail);padding:5px 10px;min-width:180px;flex:0 0 auto;
+}
+.mcard .mh{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.mcard .mh b{font-family:var(--f-disp);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.mgrid{display:grid;grid-template-columns:repeat(3,auto);gap:1px 12px;font-family:var(--f-data);font-size:10px}
+.mgrid i{color:var(--ink-faint);font-style:normal}
+.mgrid u{text-decoration:none;color:var(--ink)}
+
+/* ---------- self test ---------- */
+.tests{padding:10px 12px;overflow:auto;font-family:var(--f-data);font-size:11.5px;flex:1}
+.tests table{border-collapse:collapse;width:100%}
+.tests th{
+  text-align:left;font-family:var(--f-disp);font-size:10px;letter-spacing:.14em;
+  color:var(--ink-faint);text-transform:uppercase;border-bottom:1px solid var(--rail);padding:4px 6px;font-weight:600;
+}
+.tests td{padding:3px 6px;border-bottom:1px solid #1B242C;vertical-align:top}
+.tests td.st{width:52px;font-weight:600}
+.pass{color:var(--ok)} .fail{color:var(--warn)}
+.summary{
+  display:flex;gap:14px;align-items:center;padding:8px 12px;background:var(--panel-2);
+  border-bottom:1px solid var(--rail);font-family:var(--f-data);font-size:11px;
+}
+.badge{padding:2px 8px;border-radius:2px;font-weight:600;letter-spacing:.08em}
+.badge.pass{background:#17301F;border:1px solid #2E5A3B}
+.badge.fail{background:#331714;border:1px solid #6A2A20}
+
+.hint{
+  position:absolute;right:8px;bottom:6px;font-family:var(--f-data);font-size:9.5px;
+  color:var(--ink-faint);pointer-events:none;letter-spacing:.06em;
+}
+
+@media (max-width:1000px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) auto;
+       grid-template-areas:"head" "rail" "main" "foot";overflow:auto}
+  .rail-col{border-right:none;border-bottom:1px solid #000;max-height:46vh}
+  .main{min-height:70vh}
+  body{overflow:auto}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- polish pass ---------- */
+*{-webkit-font-smoothing:antialiased}
+::selection{background:rgba(242,169,59,.3)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#26313B;border-radius:5px;border:2px solid #10151A}
+::-webkit-scrollbar-thumb:hover{background:#33414D}
+header.mast{
+  background:linear-gradient(180deg,#131A21 0%,#0E1216 100%);
+  border-bottom:1px solid #1E2830;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 4px 18px rgba(0,0,0,.35);
+}
+.screen-wrap{
+  border-radius:7px;overflow:hidden;
+  background:
+    radial-gradient(120% 130% at 50% 0%,rgba(38,52,66,.35) 0%,rgba(10,14,18,0) 55%),
+    var(--screen);
+  box-shadow:0 0 0 1px #1B242C,0 0 26px rgba(0,0,0,.5) inset,0 8px 24px rgba(0,0,0,.35);
+}
+.btn{
+  border-radius:5px;transition:background .12s,border-color .12s,box-shadow .12s,transform .05s;
+}
+.btn:hover{border-color:#3A4956;background:#1A222B}
+.btn:active{transform:translateY(1px)}
+.btn.on{box-shadow:0 0 0 1px rgba(242,169,59,.35),0 0 14px rgba(242,169,59,.28)}
+select,input[type=text]{
+  border-radius:5px;transition:border-color .12s,box-shadow .12s;
+}
+select:hover,input[type=text]:hover{border-color:#3A4956}
+select:focus,input[type=text]:focus{box-shadow:0 0 0 2px rgba(242,169,59,.25)}
+input[type=range]{accent-color:var(--amber);height:14px}
+.tab{border-radius:5px 5px 0 0;transition:color .12s,background .12s}
+.tab:hover{color:var(--ink)}
+.tab.on{background:linear-gradient(180deg,rgba(242,169,59,.16),rgba(242,169,59,.05));box-shadow:0 -1px 0 var(--amber) inset}
+.card{border-radius:7px;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:#2C3945}
+.card.open{box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.card-head{transition:background .12s}
+.card-head:hover{background:rgba(255,255,255,.025)}
+.mcard{border-radius:6px;background:linear-gradient(180deg,#131A21,#10161C)}
+.chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:8px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 7px;
+  border:1px solid;border-radius:11px;cursor:pointer;user-select:none;
+  font-family:var(--f-disp);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-dim);background:rgba(255,255,255,.02);
+  transition:opacity .12s,background .12s,color .12s;
+}
+.chip:hover{background:rgba(255,255,255,.06);color:var(--ink)}
+.chip i{width:7px;height:7px;border-radius:50%;display:inline-block;box-shadow:0 0 6px currentColor}
+.chip.off{opacity:.32;filter:saturate(.3)}
+.summary,.ctl-bar{background:linear-gradient(180deg,#121920,#10161C)}
+.badge.pass{box-shadow:0 0 10px rgba(93,192,127,.3)}
+.badge.fail{box-shadow:0 0 10px rgba(228,87,60,.35)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1>Signal Chain Studio</h1>
+        <p class="sub">time · spectrum · transfer</p>
+      </div>
+    </div>
+    <div class="globals">
+      <div class="gfield"><span>Sample rate</span>
+        <select id="fsSel">
+          <option value="100000">100 kSa/s</option>
+          <option value="1000000">1 MSa/s</option>
+          <option value="10000000" selected>10 MSa/s</option>
+          <option value="100000000">100 MSa/s</option>
+          <option value="1000000000">1 GSa/s</option>
+        </select>
+      </div>
+      <div class="gfield"><span>FFT size</span>
+        <select id="fftSel">
+          <option>1024</option><option>2048</option><option selected>4096</option>
+          <option>8192</option><option>16384</option><option>32768</option>
+          <option>65536</option><option>131072</option>
+        </select>
+      </div>
+      <div class="gfield"><span>Window</span>
+        <select id="winSel">
+          <option value="hann" selected>Hann</option>
+          <option value="hamming">Hamming</option>
+          <option value="blackmanharris">Blackman-Harris</option>
+          <option value="flattop">Flat-top</option>
+          <option value="rect">Rectangular</option>
+        </select>
+      </div>
+      <div class="gfield" style="min-width:190px"><span>Sim speed — <b id="speedV" style="color:var(--amber);font-weight:600">1/50×</b></span>
+        <input type="range" id="speedSel" min="0" max="1000" step="1" value="717" title="how fast simulated time runs against wall-clock time">
+      </div>
+      <button class="btn on" id="runBtn">Running</button>
+      <button class="btn" id="singleBtn" title="arm, capture one triggered sweep, stop">Single</button>
+      <button class="btn" id="stepBtn" title="advance one division while paused">Step</button>
+      <button class="btn" id="clearBtn">Clear</button>
+    </div>
+  </header>
+
+  <aside class="rail-col">
+    <div class="rail-head">
+      <h2>Chain</h2>
+      <span class="count" id="chainCount"></span>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <button class="btn sm" id="presetBtn">Presets</button>
+      </div>
+    </div>
+    <ol class="chain" id="chain"></ol>
+    <div class="add-zone">
+      <select id="addSel">
+        <option value="">+ Add stage…</option>
+        <option value="gain">Amplifier / attenuator (dB, Z)</option>
+        <option value="filter">Filter (bandwidth limits)</option>
+        <option value="passive">Passive R / L / C network</option>
+        <option value="noise">Noise injection</option>
+        <option value="bwlimit">Bandwidth limit (component rating)</option>
+      </select>
+    </div>
+  </aside>
+
+  <div class="main">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Oscilloscope</h2>
+        <div class="ctl">
+          <label for="trigSel">Trigger</label>
+          <select id="trigSel"><option value="auto" selected>Auto</option><option value="normal">Normal</option><option value="off">Off</option></select>
+          <select id="trigEdge"><option value="1">Rising</option><option value="-1">Falling</option></select>
+          <select id="trigSrc"></select>
+        </div>
+        <div class="ctl"><label for="trigLvl">Level</label><input type="range" id="trigLvl" min="-5" max="5" step="0.001" value="0"><span class="val" id="trigLvlV">0.000 V</span></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="curOn"> Cursors</label></div>
+        <div class="chips" id="traceChips" title="click to show / hide a trace"></div>
+      </div>
+      <div class="screen-wrap">
+        <canvas id="scopeCv"></canvas>
+        <div class="hint">wheel = time zoom · shift+wheel = volts · drag = pan</div>
+      </div>
+      <div class="ctl-bar">
+        <div class="ctl"><label for="tdiv">Time/div</label><input type="range" id="tdiv" min="0" max="1000" step="1" value="520"><span class="val" id="tdivV"></span></div>
+        <div class="ctl"><label for="vdiv">Volts/div</label><input type="range" id="vdiv" min="0" max="1000" step="1" value="500"><span class="val" id="vdivV"></span></div>
+        <div class="ctl"><label for="hpos">Horiz pos</label><input type="range" id="hpos" min="-5" max="5" step="0.01" value="0"><span class="val" id="hposV"></span></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="persist"> Persistence</label></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="envMode" checked> Peak envelope</label></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="eyeMode"> Eye diagram</label></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="iqMode"> IQ plot</label></div>
+        <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="rollMode"> Roll</label></div>
+        <div class="ctl"><label for="fpsSel">Refresh</label><select id="fpsSel">
+          <option value="60" selected>60 Hz</option><option value="30">30 Hz</option><option value="10">10 Hz</option>
+          <option value="5">5 Hz</option><option value="2">2 Hz</option><option value="1">1 Hz</option>
+        </select></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 id="anaTitle">Analysis</h2>
+        <div class="tabs">
+          <button class="tab on" data-pane="specPane">Spectrum</button>
+          <button class="tab" data-pane="tfPane">Transfer</button>
+          <button class="tab" data-pane="harmPane">Harmonics</button>
+          <button class="tab" data-pane="testPane">Self-test</button>
+        </div>
+      </div>
+
+      <div class="pane on" id="specPane">
+        <div class="screen-wrap"><canvas id="specCv"></canvas>
+          <div class="hint">wheel = span · drag = pan</div>
+        </div>
+        <div class="ctl-bar">
+          <div class="ctl"><label for="specSrc">Trace</label><select id="specSrc"></select></div>
+          <div class="ctl"><label for="specLog">Freq axis</label><select id="specLog"><option value="log" selected>Log</option><option value="lin">Linear</option></select></div>
+          <div class="ctl"><label for="specRef">Ref level</label><input type="range" id="specRef" min="-40" max="40" step="1" value="10"><span class="val" id="specRefV"></span></div>
+          <div class="ctl"><label for="specRange">Range</label><input type="range" id="specRange" min="40" max="180" step="5" value="120"><span class="val" id="specRangeV"></span></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="showHarm" checked> Harmonics</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="showMask" checked> Chain |H(f)|</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="specAvg"> Averaging</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="specStem"> Discrete bins</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="specPhase"> Phase</label></div>
+          <button class="btn sm" id="snapBin" title="set the source frequency to the nearest FFT bin centre (coherent sampling): leakage vanishes and a pure tone becomes a single spike">Snap f&#8320; to bin</button>
+        </div>
+      </div>
+
+      <div class="pane" id="tfPane">
+        <div class="screen-wrap"><canvas id="tfCv"></canvas>
+          <div class="hint">solid = total · faint = per stage</div>
+        </div>
+        <div class="ctl-bar">
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="tfPhase" checked> Phase</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="tfStages" checked> Per-stage</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="tfMarkers" checked> −3 dB markers</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="tfHarm" checked> Harmonic ticks</label></div>
+          <span class="val" id="tfReadout" style="font-family:var(--f-data);font-size:10.5px;color:var(--ink-dim)"></span>
+        </div>
+      </div>
+
+      <div class="pane" id="harmPane">
+        <div class="screen-wrap"><canvas id="harmCv"></canvas>
+          <div class="hint">the filtered output is the harmonics, each scaled by |H|</div>
+        </div>
+        <div class="ctl-bar">
+          <div class="ctl"><label for="harmN">Harmonics</label><input type="range" id="harmN" min="1" max="49" step="1" value="15"><span class="val" id="harmNV">15</span></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="harmParts" checked> Individual harmonics</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="harmSum" checked> Fourier sum (input)</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="harmPred" checked> Predicted output (Σ aₖ·H)</label></div>
+          <div class="ctl"><label class="chk" style="margin:0"><input type="checkbox" id="harmMeas" checked> Measured output</label></div>
+        </div>
+        <div class="tests" id="harmTable" style="max-height:150px"></div>
+      </div>
+
+      <div class="pane" id="testPane">
+        <div class="summary">
+          <button class="btn sm" id="runTests">Run self-test</button>
+          <span id="testBadge"></span>
+          <span id="testMeta" style="color:var(--ink-faint)"></span>
+        </div>
+        <div class="tests" id="testOut"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="meas" id="meas"></footer>
+</div>
+<script>
+/* =================================================================
+   SIGNAL CHAIN STUDIO — DSP core
+   Pure, DOM-free. Extracted verbatim by the QA harness (qa/run_qa.sh)
+   and cross-checked against numpy/scipy references.
+   ================================================================= */
+// ==== DSP-CORE-BEGIN ====
+var DSP = (function () {
+'use strict';
+var TAU = 2 * Math.PI;
+
+/* ---------------- scalar helpers ---------------- */
+function db(x) { return 20 * Math.log10(Math.max(Math.abs(x), 1e-30)); }
+function undb(d) { return Math.pow(10, d / 20); }
+function clamp(x, a, b) { return x < a ? a : (x > b ? b : x); }
+
+/* ---------------- FFT (iterative radix-2, in place) ---------------- */
+function fft(re, im) {
+  var n = re.length, i, j, bit, len, k, t;
+  for (i = 1, j = 0; i < n; i++) {
+    for (bit = n >> 1; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (len = 2; len <= n; len <<= 1) {
+    var half = len >> 1, ang = -TAU / len;
+    for (i = 0; i < n; i += len) {
+      for (k = 0; k < half; k++) {
+        var cr = Math.cos(ang * k), ci = Math.sin(ang * k);
+        var ur = re[i + k], ui = im[i + k];
+        var xr = re[i + k + half], xi = im[i + k + half];
+        var vr = xr * cr - xi * ci, vi = xr * ci + xi * cr;
+        re[i + k] = ur + vr; im[i + k] = ui + vi;
+        re[i + k + half] = ur - vr; im[i + k + half] = ui - vi;
+      }
+    }
+  }
+}
+
+/* ---------------- windows (periodic) ---------------- */
+var WINDOWS = {
+  rect:           { cg: 1.0,     enbw: 1.000000, f: function (i, N) { return 1; } },
+  hann:           { cg: 0.5,     enbw: 1.500000, f: function (i, N) { return 0.5 - 0.5 * Math.cos(TAU * i / N); } },
+  hamming:        { cg: 0.54,    enbw: 1.362826, f: function (i, N) { return 0.54 - 0.46 * Math.cos(TAU * i / N); } },
+  blackmanharris: { cg: 0.35875, enbw: 2.004353, f: function (i, N) {
+      return 0.35875 - 0.48829 * Math.cos(TAU * i / N) + 0.14128 * Math.cos(2 * TAU * i / N) - 0.01168 * Math.cos(3 * TAU * i / N); } },
+  flattop:        { cg: 0.21557895, enbw: 3.770246, f: function (i, N) {
+      return 0.21557895 - 0.41663158 * Math.cos(TAU * i / N) + 0.277263158 * Math.cos(2 * TAU * i / N)
+           - 0.083578947 * Math.cos(3 * TAU * i / N) + 0.006947368 * Math.cos(4 * TAU * i / N); } }
+};
+function windowVec(name, N) {
+  var w = WINDOWS[name] || WINDOWS.hann, v = new Float64Array(N);
+  for (var i = 0; i < N; i++) v[i] = w.f(i, N);
+  return { v: v, cg: w.cg, enbw: w.enbw };
+}
+
+/* Single-sided amplitude spectrum.
+   ampl[k] = peak-volt amplitude of a tone in bin k. magDb = dBV (RMS ref 1 V). */
+function spectrum(x, fs, winName) {
+  var N = x.length;
+  var w = windowVec(winName || 'hann', N);
+  var re = new Float64Array(N), im = new Float64Array(N), i;
+  for (i = 0; i < N; i++) re[i] = x[i] * w.v[i];
+  fft(re, im);
+  var half = (N >> 1) + 1;
+  var ampl = new Float64Array(half), magDb = new Float64Array(half);
+  var scale = 2 / (N * w.cg);
+  for (i = 0; i < half; i++) {
+    var m = Math.sqrt(re[i] * re[i] + im[i] * im[i]) * scale;
+    if (i === 0 || i === N / 2) m *= 0.5;
+    ampl[i] = m;
+    magDb[i] = db(m / Math.SQRT2);
+  }
+  return { ampl: ampl, magDb: magDb, re: re, im: im, df: fs / N, n: half, fs: fs, N: N, enbw: w.enbw, win: winName || 'hann' };
+}
+
+/* Amplitude of a tone at frequency f, independent of bin alignment.
+   Power-sums the main lobe and divides by the window ENBW — removes the
+   scalloping loss that plain peak-picking suffers (up to 1.4 dB for Hann). */
+function toneAmplitude(sp, f, halfSpan) {
+  var bin = f / sp.df, c = Math.round(bin);
+  var span = halfSpan || Math.ceil(2 * sp.enbw) + 1;
+  var lo = Math.max(0, c - span), hi = Math.min(sp.n - 1, c + span), acc = 0;
+  for (var i = lo; i <= hi; i++) acc += sp.ampl[i] * sp.ampl[i];
+  return Math.sqrt(acc / sp.enbw);
+}
+
+/* ---------------- biquad ---------------- */
+function bq(b0, b1, b2, a1, a2) { return { b0: b0, b1: b1, b2: b2, a1: a1, a2: a2, z1: 0, z2: 0 }; }
+function bqReset(s) {
+  if (s.fir) { s.buf.fill(0); s.pos = 0; return s; }
+  s.z1 = 0; s.z2 = 0; return s;
+}
+function bqStep(s, x) {                       /* transposed direct form II */
+  if (s.fir) {
+    var b = s.buf, hh = s.h, L = hh.length;
+    b[s.pos] = x;
+    var acc = 0, idx = s.pos;
+    for (var i2 = 0; i2 < L; i2++) { acc += hh[i2] * b[idx]; idx = idx ? idx - 1 : L - 1; }
+    s.pos = (s.pos + 1) % L;
+    return acc;
+  }
+  var y = s.b0 * x + s.z1;
+  s.z1 = s.b1 * x - s.a1 * y + s.z2;
+  s.z2 = s.b2 * x - s.a2 * y;
+  return y;
+}
+/* H(e^{jw}) for one section; w in rad/sample */
+function bqResp(s, w) {
+  if (s.fir) {
+    var re = 0, im = 0;
+    for (var n2 = 0; n2 < s.h.length; n2++) { re += s.h[n2] * Math.cos(w * n2); im -= s.h[n2] * Math.sin(w * n2); }
+    return { re: re, im: im };
+  }
+  var c1 = Math.cos(-w), s1 = Math.sin(-w), c2 = Math.cos(-2 * w), s2 = Math.sin(-2 * w);
+  var nr = s.b0 + s.b1 * c1 + s.b2 * c2, ni = s.b1 * s1 + s.b2 * s2;
+  var dr = 1 + s.a1 * c1 + s.a2 * c2, di = s.a1 * s1 + s.a2 * s2;
+  var d = dr * dr + di * di;
+  return { re: (nr * dr + ni * di) / d, im: (ni * dr - nr * di) / d };
+}
+function cascadeResp(sections, w) {
+  var re = 1, im = 0;
+  for (var i = 0; i < sections.length; i++) {
+    var h = bqResp(sections[i], w);
+    var r = re * h.re - im * h.im; im = re * h.im + im * h.re; re = r;
+  }
+  return { re: re, im: im };
+}
+function cmag(c) { return Math.sqrt(c.re * c.re + c.im * c.im); }
+function cphase(c) { return Math.atan2(c.im, c.re); }
+
+/* ---------------- RBJ designs ---------------- */
+function rbj(kind, fs, f0, Q) {
+  f0 = clamp(f0, 1e-6, fs * 0.4999);
+  var w0 = TAU * f0 / fs, cw = Math.cos(w0), sw = Math.sin(w0), al = sw / (2 * Q);
+  var b0, b1, b2, a0, a1, a2;
+  if (kind === 'lp')      { b0 = (1 - cw) / 2; b1 = 1 - cw;   b2 = b0; }
+  else if (kind === 'hp') { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = b0; }
+  else if (kind === 'bp') { b0 = al;           b1 = 0;         b2 = -al; }
+  else                    { b0 = 1;            b1 = -2 * cw;   b2 = 1; }   /* notch */
+  a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al;
+  return bq(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
+}
+/* first-order LP/HP via bilinear with prewarp (exact -3 dB at f0) */
+function onePole(kind, fs, f0) {
+  f0 = clamp(f0, 1e-6, fs * 0.4999);
+  var K = 1 / Math.tan(Math.PI * f0 / fs);
+  if (kind === 'lp') { var a = 1 / (1 + K); return bq(a, a, 0, (1 - K) / (1 + K), 0); }
+  var g = K / (1 + K); return bq(g, -g, 0, (1 - K) / (1 + K), 0);
+}
+/* Butterworth cascade, order n>=1 */
+function butterQ(order, k) {
+  /* k = 0 .. floor(order/2)-1.  Odd orders also carry one real pole (Q-less). */
+  return (order % 2)
+    ? 1 / (2 * Math.cos(Math.PI * (k + 1) / order))
+    : 1 / (2 * Math.cos(Math.PI * (2 * k + 1) / (2 * order)));
+}
+function butter(kind, fs, f0, order) {
+  order = Math.max(1, Math.min(16, Math.round(order)));
+  var out = [], k;
+  if (order % 2) out.push(onePole(kind, fs, f0));
+  for (k = 0; k < Math.floor(order / 2); k++) out.push(rbj(kind, fs, f0, butterQ(order, k)));
+  return out;
+}
+
+/* windowed-sinc linear-phase FIR (Hamming). Symmetric taps => the phase is
+   exactly -w*(taps-1)/2: every frequency is delayed by the SAME (taps-1)/2
+   samples, so the filter is a pure delay in time - shape is preserved. */
+function firSinc(kind, fs, flo, fhi, taps) {
+  taps = Math.max(11, Math.round(taps)); if (taps % 2 === 0) taps++;
+  var M = (taps - 1) / 2;
+  function lp(fc) {
+    fc = Math.max(1e-6, Math.min(fc, fs * 0.4999));
+    var h = new Float64Array(taps), n, sum = 0, x;
+    for (n = 0; n < taps; n++) {
+      x = n - M;
+      h[n] = (x === 0) ? 2 * fc / fs : Math.sin(TAU * fc / fs * x) / (Math.PI * x);
+      h[n] *= 0.54 - 0.46 * Math.cos(TAU * n / (taps - 1));
+      sum += h[n];
+    }
+    for (n = 0; n < taps; n++) h[n] /= sum;
+    return h;
+  }
+  var h, i, A, B;
+  if (kind === 'lp') h = lp(fhi);
+  else if (kind === 'hp') { h = lp(flo); for (i = 0; i < taps; i++) h[i] = -h[i]; h[M] += 1; }
+  else if (kind === 'bp') { A = lp(fhi); B = lp(flo); h = new Float64Array(taps); for (i = 0; i < taps; i++) h[i] = A[i] - B[i]; }
+  else { A = lp(fhi); B = lp(flo); h = new Float64Array(taps); for (i = 0; i < taps; i++) h[i] = B[i] - A[i]; h[M] += 1; }
+  return { fir: true, h: h, buf: new Float64Array(taps), pos: 0 };
+}
+
+/* ---------------- bilinear transform of an analog biquad ----------------
+   H(s) = (B2 s^2 + B1 s + B0) / (A2 s^2 + A1 s + A0), prewarped at fw Hz  */
+function bilinear(B2, B1, B0, A2, A1, A0, fs, fw) {
+  var K;
+  if (fw && fw > 0 && fw < fs * 0.4999) { var w = TAU * fw; K = w / Math.tan(w / (2 * fs)); }
+  else K = 2 * fs;
+  var K2 = K * K;
+  var b0 = B2 * K2 + B1 * K + B0, b1 = 2 * B0 - 2 * B2 * K2, b2 = B2 * K2 - B1 * K + B0;
+  var a0 = A2 * K2 + A1 * K + A0, a1 = 2 * A0 - 2 * A2 * K2, a2 = A2 * K2 - A1 * K + A0;
+  return bq(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
+}
+
+/* ---------------- passive R/L/C networks ----------------
+   R in ohm, L in henry, C in farad. Returns { sections, info }.       */
+function passive(topo, R, L, C, fs) {
+  R = Math.max(R, 1e-9);
+  var f0, Q, sec, info;
+  switch (topo) {
+    case 'rc_lp':                                   /* series R, shunt C */
+      f0 = 1 / (TAU * R * C);
+      sec = [bilinear(0, 0, 1, 0, R * C, 1, fs, f0)];
+      info = { label: 'RC low-pass', fc: f0, Q: null, slope: '−20 dB/dec' }; break;
+    case 'cr_hp':                                   /* series C, shunt R */
+      f0 = 1 / (TAU * R * C);
+      sec = [bilinear(0, R * C, 0, 0, R * C, 1, fs, f0)];
+      info = { label: 'CR high-pass', fc: f0, Q: null, slope: '+20 dB/dec' }; break;
+    case 'lr_lp':                                   /* series L, shunt R */
+      f0 = R / (TAU * L);
+      sec = [bilinear(0, 0, 1, 0, L / R, 1, fs, f0)];
+      info = { label: 'LR low-pass', fc: f0, Q: null, slope: '−20 dB/dec' }; break;
+    case 'rl_hp':                                   /* series R, shunt L */
+      f0 = R / (TAU * L);
+      sec = [bilinear(0, L / R, 0, 0, L / R, 1, fs, f0)];
+      info = { label: 'RL high-pass', fc: f0, Q: null, slope: '+20 dB/dec' }; break;
+    case 'rlc_lp':                                  /* series RLC, out across C */
+      f0 = 1 / (TAU * Math.sqrt(L * C)); Q = Math.sqrt(L / C) / R;
+      sec = [bilinear(0, 0, 1, L * C, R * C, 1, fs, f0)];
+      info = { label: 'Series RLC → C (LP)', fc: f0, Q: Q, slope: '−40 dB/dec' }; break;
+    case 'rlc_bp':                                  /* out across R */
+      f0 = 1 / (TAU * Math.sqrt(L * C)); Q = Math.sqrt(L / C) / R;
+      sec = [bilinear(0, R * C, 0, L * C, R * C, 1, fs, f0)];
+      info = { label: 'Series RLC → R (BP)', fc: f0, Q: Q, slope: 'BW = f₀/Q' }; break;
+    case 'rlc_hp':                                  /* out across L */
+      f0 = 1 / (TAU * Math.sqrt(L * C)); Q = Math.sqrt(L / C) / R;
+      sec = [bilinear(L * C, 0, 0, L * C, R * C, 1, fs, f0)];
+      info = { label: 'Series RLC → L (HP)', fc: f0, Q: Q, slope: '+40 dB/dec' }; break;
+    case 'notch':                                   /* series R, shunt L+C in series */
+      f0 = 1 / (TAU * Math.sqrt(L * C)); Q = Math.sqrt(L / C) / R;
+      sec = [bilinear(L * C, 0, 1, L * C, R * C, 1, fs, f0)];
+      info = { label: 'Series-LC trap (notch)', fc: f0, Q: Q, slope: 'null at f₀' }; break;
+    default:
+      sec = [bq(1, 0, 0, 0, 0)]; info = { label: 'through', fc: null, Q: null, slope: '' };
+  }
+  if (info.fc) {
+    info.aliased = info.fc >= fs / 2;              /* resonance above Nyquist: meaningless */
+    info.warped = info.fc > fs / 20;               /* response away from fc drifts from the analog network */
+  }
+  return { sections: sec, info: info };
+}
+
+/* ---------------- edge shaping ----------------
+   g(u) = u − sin(2πu)/2π  (integrated Hann): C1-continuous, no overshoot.
+   Its 10–90 % rise spans EDGE_K of the transition window.               */
+var EDGE_K = 0.482188328;   /* solved from g(u)=0.1 / 0.9 */
+function edgeShape(u) { return u <= 0 ? 0 : (u >= 1 ? 1 : u - Math.sin(TAU * u) / TAU); }
+function riseToWindow(tr, fs) { return Math.max(1e-9, tr * fs / EDGE_K); }  /* in samples */
+
+/* ---------------- PRBS ---------------- */
+var PRBS_TAPS = { 7: 6, 9: 5, 11: 9, 15: 14, 23: 18, 31: 28 };
+function prbsInit(order) { return { order: order, mask: (Math.pow(2, order) - 1), reg: (Math.pow(2, order) - 1) }; }
+function prbsNext(p) {
+  var n = p.order, k = PRBS_TAPS[n] || (n - 1);
+  var b = (((p.reg >>> (n - 1)) ^ (p.reg >>> (k - 1))) & 1);
+  p.reg = ((p.reg * 2) + b) % (p.mask + 1);
+  return b;
+}
+
+/* ---------------- noise ---------------- */
+function gauss(state) {                       /* Box–Muller with cache */
+  if (state.spare !== null && state.spare !== undefined) { var s = state.spare; state.spare = null; return s; }
+  var u, v, r;
+  do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; r = u * u + v * v; } while (r >= 1 || r === 0);
+  var f = Math.sqrt(-2 * Math.log(r) / r);
+  state.spare = v * f;
+  return u * f;
+}
+function pinkInit() { return { b0: 0, b1: 0, b2: 0, spare: null }; }
+function pinkNext(st) {                       /* Kellet 3-pole approximation */
+  var white = gauss(st);
+  st.b0 = 0.99765 * st.b0 + white * 0.0990460;
+  st.b1 = 0.96300 * st.b1 + white * 0.2965164;
+  st.b2 = 0.57000 * st.b2 + white * 1.0526913;
+  return (st.b0 + st.b1 + st.b2 + white * 0.1848) * 0.2201;  /* ≈ unit RMS */
+}
+
+/* ---------------- source generator ----------------
+   cfg: { wave, amp, freq, offset, duty, bitrate, carrier, prbsOrder,
+          rise, ringAmp, ringFreq, ringDecay, unipolar, f2, amp2, noiseRms } */
+function makeSource(cfg, fs) {
+  var s = {
+    cfg: cfg, fs: fs, n: 0, phase: 0, bitPhase: 0,
+    prbs: prbsInit(cfg.prbsOrder || 7), bit: 0,
+    lvl: 0, target: 0, v0: 0, v1: 0, u: 1, win: 1,
+    zr: 0, zi: 0, rnd: { spare: null }
+  };
+  s.target = null;
+  return s;
+}
+function sourceLevel(s, cfg) {                /* ideal (unshaped) logic level */
+  switch (cfg.wave) {
+    case 'square': return s.phase < (cfg.duty / 100) ? 1 : (cfg.unipolar ? 0 : -1);
+    case 'prbs':   return cfg.unipolar ? s.bit : (s.bit ? 1 : -1);
+    case 'ook':    return s.bit;
+    default: return 0;
+  }
+}
+function isLevelWave(w) { return w === 'square' || w === 'prbs' || w === 'ook'; }
+
+function sourceRender(s, out, count) {
+  var cfg = s.cfg, fs = s.fs, i;
+  var dphi = cfg.freq / fs;
+  var dbit = (cfg.bitrate || 1e3) / fs;
+  var winSamp = riseToWindow(Math.max(cfg.rise || 0, 1e-15), fs);
+  var du = 1 / winSamp;
+  var ringOn = (cfg.ringAmp || 0) > 0 && (cfg.ringFreq || 0) > 0;
+  var rw = TAU * (cfg.ringFreq || 0) / fs;
+  var rdec = Math.exp(-1 / Math.max(1e-6, (cfg.ringDecay || 1e-6) * fs));
+  var rc = Math.cos(rw), rs = Math.sin(rw);
+  var levelWave = isLevelWave(cfg.wave);
+
+  for (i = 0; i < count; i++) {
+    var y = 0;
+    if (levelWave) {
+      /* advance bit clock for prbs/ook */
+      if (cfg.wave === 'prbs' || cfg.wave === 'ook') {
+        s.bitPhase += dbit;
+        if (s.bitPhase >= 1 || s.target === null) { s.bitPhase -= Math.floor(s.bitPhase); s.bit = prbsNext(s.prbs); }
+      }
+      var tgt = sourceLevel(s, cfg);
+      if (s.target === null) { s.target = tgt; s.v0 = tgt; s.v1 = tgt; s.u = 1; }
+      if (tgt !== s.target) {
+        var cur = s.v0 + (s.v1 - s.v0) * edgeShape(s.u);
+        s.v0 = cur; s.v1 = tgt; s.u = du; s.target = tgt;   /* first shaped sample is one step in */
+        if (ringOn) s.zi += (cfg.ringAmp / 100) * (s.v1 - s.v0);
+      }
+      var env = s.v0 + (s.v1 - s.v0) * edgeShape(s.u);
+      s.u = Math.min(1, s.u + du);
+      if (ringOn) {
+        env += -s.zr;
+        var nr = (s.zr * rc - s.zi * rs) * rdec;
+        s.zi = (s.zr * rs + s.zi * rc) * rdec; s.zr = nr;
+      }
+      y = (cfg.wave === 'ook') ? env * Math.sin(TAU * s.phase) * cfg.amp : env * cfg.amp;
+    } else {
+      switch (cfg.wave) {
+        case 'sine':     y = cfg.amp * Math.sin(TAU * s.phase); break;
+        case 'triangle': y = cfg.amp * (2 / Math.PI) * Math.asin(Math.sin(TAU * s.phase)); break;
+        case 'saw':      y = cfg.amp * (2 * (s.phase - Math.floor(s.phase + 0.5))); break;
+        case 'twotone':  y = cfg.amp * Math.sin(TAU * s.phase) + (cfg.amp2 || 0) * Math.sin(TAU * s.n * (cfg.f2 || 0) / fs); break;
+        case 'iq':       y = cfg.amp * ((cfg.iAmp == null ? 0.7 : cfg.iAmp) * Math.cos(TAU * s.phase)
+                                        - (cfg.qAmp == null ? 0.7 : cfg.qAmp) * Math.sin(TAU * s.phase)); break;
+        case 'dc':       y = cfg.amp; break;
+        case 'noise':    y = cfg.amp * gauss(s.rnd); break;
+      }
+    }
+    /* carrier phase advances for sine-family and for the OOK carrier */
+    var pinc = (cfg.wave === 'ook' || cfg.wave === 'iq') ? (cfg.carrier || 1e5) / fs : dphi;
+    s.phase += pinc; if (s.phase >= 1) s.phase -= Math.floor(s.phase);
+    s.n++;
+    out[i] = y + (cfg.offset || 0);
+  }
+  return out;
+}
+
+/* ---------------- stage compilation ---------------- */
+function compileStage(st, fs) {
+  var c = { type: st.type, gain: 1, sections: [], linear: true, meta: {} };
+  if (st.type === 'gain') {
+    var divider = st.rload / (st.rsrc + st.rload);
+    c.gain = undb(st.db) * divider;
+    c.meta.dividerDb = db(divider);
+    c.meta.totalDb = st.db + c.meta.dividerDb;
+    c.meta.clip = !!st.clip;
+    c.meta.vmax = (st.vmax === undefined ? 1 : st.vmax);
+    c.meta.soft = !!st.soft;
+    if (st.clip) c.linear = false;
+  } else if (st.type === 'filter') {
+    if (st.family === 'fir') c.sections = [firSinc(st.resp, fs, st.flo, st.fhi, st.taps || 129)];
+    else if (st.resp === 'lp')      c.sections = butter('lp', fs, st.fhi, st.order);
+    else if (st.resp === 'hp') c.sections = butter('hp', fs, st.flo, st.order);
+    else if (st.resp === 'bp') c.sections = butter('hp', fs, st.flo, st.order).concat(butter('lp', fs, st.fhi, st.order));
+    else if (st.resp === 'notch') c.sections = [rbj('notch', fs, st.flo, st.q)];
+  } else if (st.type === 'bwlimit') {
+    var bl = [];
+    if (st.hasLo) bl = bl.concat(butter('hp', fs, st.fmin, st.bwOrder));
+    if (st.hasHi) bl = bl.concat(butter('lp', fs, st.fmax, st.bwOrder));
+    c.sections = bl;
+  } else if (st.type === 'passive') {
+    var p = passive(st.topo, st.R, st.L, st.C, fs);
+    c.sections = p.sections; c.meta = p.info;
+  } else if (st.type === 'noise') {
+    c.meta.rms = st.rms;
+    c.meta.pink = !!st.pink;
+  }
+  return c;
+}
+function stageResp(c, f, fs) {
+  var w = TAU * f / fs;
+  var h = cascadeResp(c.sections, w);
+  return { re: h.re * c.gain, im: h.im * c.gain };
+}
+function chainResp(compiled, f, fs) {
+  var re = 1, im = 0;
+  for (var i = 0; i < compiled.length; i++) {
+    if (compiled[i].bypass) continue;
+    var h = stageResp(compiled[i], f, fs);
+    var r = re * h.re - im * h.im; im = re * h.im + im * h.re; re = r;
+  }
+  return { re: re, im: im };
+}
+function processStage(c, x) {
+  var y = x * c.gain, i;
+  for (i = 0; i < c.sections.length; i++) y = bqStep(c.sections[i], y);
+  if (c.type === 'noise') {
+    if (!c.rnd) c.rnd = pinkInit();
+    y += (c.meta.rms || 0) * (c.meta.pink ? pinkNext(c.rnd) : gauss(c.rnd));
+  }
+  if (c.meta.clip) {
+    var v = c.meta.vmax;
+    y = c.meta.soft ? v * Math.tanh(y / v) : clamp(y, -v, v);
+  }
+  return y;
+}
+
+/* ---------------- measurements ---------------- */
+function measure(x, fs) {
+  var n = x.length, i, mn = Infinity, mx = -Infinity, sum = 0, sq = 0;
+  for (i = 0; i < n; i++) { var v = x[i]; if (v < mn) mn = v; if (v > mx) mx = v; sum += v; sq += v * v; }
+  var mean = sum / n, rms = Math.sqrt(sq / n);
+  var ac = Math.sqrt(Math.max(0, sq / n - mean * mean));
+  /* frequency: hysteretic mid-level crossings */
+  var mid = (mn + mx) / 2, hyst = (mx - mn) * 0.05, state = x[0] > mid ? 1 : -1;
+  var first = -1, last = -1, cyc = 0;
+  for (i = 1; i < n; i++) {
+    if (state < 0 && x[i] > mid + hyst) {
+      state = 1;
+      var t = i - 1 + (mid - x[i - 1]) / ((x[i] - x[i - 1]) || 1e-30);
+      if (first < 0) first = t; else { last = t; cyc++; }
+    } else if (state > 0 && x[i] < mid - hyst) state = -1;
+  }
+  var freq = (cyc > 0 && last > first) ? cyc * fs / (last - first) : 0;
+  return { min: mn, max: mx, pp: mx - mn, mean: mean, rms: rms, acrms: ac, freq: freq };
+}
+/* Settled top / base levels (median of each half) — immune to overshoot. */
+function topBase(x) {
+  var i, mn = Infinity, mx = -Infinity;
+  for (i = 0; i < x.length; i++) { if (x[i] < mn) mn = x[i]; if (x[i] > mx) mx = x[i]; }
+  var mid = (mn + mx) / 2, hi = [], lo = [];
+  for (i = 0; i < x.length; i++) (x[i] > mid ? hi : lo).push(x[i]);
+  if (!hi.length || !lo.length) return { top: mx, base: mn };
+  hi.sort(function (a, b) { return a - b; }); lo.sort(function (a, b) { return a - b; });
+  return { top: hi[hi.length >> 1], base: lo[lo.length >> 1] };
+}
+/* 10–90 % rise time of the fastest rising transition, in seconds */
+function riseTime(x, fs, edge) {
+  var tb = topBase(x), amp = tb.top - tb.base;
+  if (edge === -1) return fallTime(x, fs);
+  var lo = tb.base + 0.1 * amp, hi = tb.base + 0.9 * amp, i;
+  var best = null, iLo = -1;
+  for (i = 1; i < x.length; i++) {
+    if (x[i - 1] <= lo && x[i] > lo) iLo = i - 1 + (lo - x[i - 1]) / ((x[i] - x[i - 1]) || 1e-30);
+    else if (iLo >= 0 && x[i - 1] <= hi && x[i] > hi) {
+      var iHi = i - 1 + (hi - x[i - 1]) / ((x[i] - x[i - 1]) || 1e-30);
+      var d = (iHi - iLo) / fs;
+      if (best === null || d < best) best = d;
+      iLo = -1;
+    }
+  }
+  return best;
+}
+function fallTime(x, fs) {
+  var tb = topBase(x), amp = tb.top - tb.base;
+  var hi = tb.base + 0.9 * amp, lo = tb.base + 0.1 * amp, i, best = null, iHi = -1;
+  for (i = 1; i < x.length; i++) {
+    if (x[i - 1] >= hi && x[i] < hi) iHi = i - 1 + (x[i - 1] - hi) / ((x[i - 1] - x[i]) || 1e-30);
+    else if (iHi >= 0 && x[i - 1] >= lo && x[i] < lo) {
+      var iLo = i - 1 + (x[i - 1] - lo) / ((x[i - 1] - x[i]) || 1e-30);
+      var d = (iLo - iHi) / fs;
+      if (best === null || d < best) best = d;
+      iHi = -1;
+    }
+  }
+  return best;
+}
+/* Overshoot as a percentage of the settled step height. */
+function overshoot(x) {
+  var tb = topBase(x), mx = -Infinity, i;
+  for (i = 0; i < x.length; i++) if (x[i] > mx) mx = x[i];
+  var step = tb.top - tb.base;
+  return step > 0 ? Math.max(0, 100 * (mx - tb.top) / step) : 0;
+}
+/* THD from an amplitude spectrum, using the k nearest bins around each harmonic */
+function thd(sp, f0, maxH) {
+  if (!f0 || f0 <= 0) return { thd: null, harmonics: [] };
+  var hs = [], k, fund = 0;
+  for (k = 1; k <= (maxH || 12); k++) {
+    var f = k * f0; if (f >= sp.fs / 2) break;
+    var a = toneAmplitude(sp, f);
+    hs.push({ k: k, f: f, amp: a, db: db(a / Math.SQRT2) });
+    if (k === 1) fund = a;
+  }
+  var s = 0;
+  for (k = 1; k < hs.length; k++) s += hs[k].amp * hs[k].amp;
+  return { thd: fund > 0 ? Math.sqrt(s) / fund : null, harmonics: hs, fund: fund };
+}
+/* dominant tone by parabolic interpolation of the largest bin */
+function peakFreq(sp, minFreq) {
+  var start = Math.max(0, Math.ceil((minFreq || 0) / sp.df)), i, bi = start, bv = -1;
+  for (i = start + 1; i < sp.n - 1; i++) if (sp.ampl[i] > bv) { bv = sp.ampl[i]; bi = i; }
+  if (bi <= 0 || bi >= sp.n - 1) return bi * sp.df;
+  var a = sp.magDb[bi - 1], b = sp.magDb[bi], c = sp.magDb[bi + 1];
+  var d = 0.5 * (a - c) / ((a - 2 * b + c) || 1e-30);
+  return (bi + clamp(d, -0.5, 0.5)) * sp.df;
+}
+
+/* ---------------- impulse / step probes (used by self-test) ---------------- */
+function impulseResponse(sections, gain, N) {
+  var y = new Float64Array(N), i, j;
+  for (i = 0; i < sections.length; i++) bqReset(sections[i]);
+  for (i = 0; i < N; i++) {
+    var v = (i === 0 ? 1 : 0) * gain;
+    for (j = 0; j < sections.length; j++) v = bqStep(sections[j], v);
+    y[i] = v;
+  }
+  return y;
+}
+/* DTFT of a finite impulse response at frequency f */
+function dtft(h, f, fs) {
+  var re = 0, im = 0, w = TAU * f / fs;
+  for (var i = 0; i < h.length; i++) { re += h[i] * Math.cos(w * i); im -= h[i] * Math.sin(w * i); }
+  return { re: re, im: im };
+}
+
+return {
+  TAU: TAU, db: db, undb: undb, clamp: clamp,
+  fft: fft, windowVec: windowVec, spectrum: spectrum, WINDOWS: WINDOWS,
+  bq: bq, bqStep: bqStep, bqReset: bqReset, bqResp: bqResp, cascadeResp: cascadeResp,
+  cmag: cmag, cphase: cphase, rbj: rbj, onePole: onePole, butter: butter, butterQ: butterQ,
+  toneAmplitude: toneAmplitude, topBase: topBase, fallTime: fallTime,
+  bilinear: bilinear, passive: passive, firSinc: firSinc,
+  EDGE_K: EDGE_K, edgeShape: edgeShape, riseToWindow: riseToWindow,
+  prbsInit: prbsInit, prbsNext: prbsNext, gauss: gauss, pinkInit: pinkInit, pinkNext: pinkNext,
+  makeSource: makeSource, sourceRender: sourceRender, isLevelWave: isLevelWave,
+  compileStage: compileStage, stageResp: stageResp, chainResp: chainResp, processStage: processStage,
+  measure: measure, riseTime: riseTime, overshoot: overshoot, thd: thd, peakFreq: peakFreq,
+  impulseResponse: impulseResponse, dtft: dtft
+};
+})();
+// ==== DSP-CORE-END ====
+</script>
+<script>
+/* =================================================================
+   Application layer: state, chain editor, instrument rendering.
+   ================================================================= */
+(function () {
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var CH = ['--ch1', '--ch2', '--ch3', '--ch4', '--ch5', '--ch6', '--ch7', '--ch8'];
+var cssVar = function (n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+
+/* ---------------- SI formatting / parsing ---------------- */
+var PFX = [[1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ'], [1e-9, 'n'], [1e-12, 'p']];
+function si(v, unit, digits) {
+  if (v === 0) return '0 ' + (unit || '');
+  if (!isFinite(v)) return '—';
+  var a = Math.abs(v), i;
+  for (i = 0; i < PFX.length; i++) if (a >= PFX[i][0] * 0.999) break;
+  if (i >= PFX.length) i = PFX.length - 1;
+  var m = v / PFX[i][0];
+  var d = digits === undefined ? (Math.abs(m) >= 100 ? 0 : Math.abs(m) >= 10 ? 1 : 2) : digits;
+  return m.toFixed(d) + ' ' + PFX[i][1] + (unit || '');
+}
+var MULT = { p: 1e-12, n: 1e-9, u: 1e-6, 'µ': 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9, g: 1e9 };
+function parseSI(s, fallback) {
+  if (typeof s === 'number') return s;
+  var t = String(s).trim().replace(/[^0-9eE+\-.,pnuµmkKMGg]/g, '').replace(',', '.');
+  var m = /^([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([pnuµmkKMGg]?)$/.exec(t);
+  if (!m) { var f = parseFloat(t); return isFinite(f) ? f : fallback; }
+  var v = parseFloat(m[1]);
+  return isFinite(v) ? v * (m[2] ? MULT[m[2]] : 1) : fallback;
+}
+function clamp(x, a, b) { return x < a ? a : (x > b ? b : x); }
+var log10 = Math.log10;
+
+/* ---------------- state ---------------- */
+var S = {
+  fs: 10e6, nfft: 4096, win: 'hann', running: true, speed: 0.02, carry: 0, single: false, fps: 60,
+  stages: [],
+  scope: { tdiv: 2e-6, vdiv: 0.5, hpos: 0, trig: 'auto', edge: 1, src: 0, level: 0, eye: false, iq: false, roll: false, hoverPx: null,
+           persist: false, env: true, cursors: false, cx: [0.35, 0.65], cy: [0.35, 0.65] },
+  spec: { src: null, log: true, ref: 10, range: 120, harm: true, mask: true, avg: false, stem: false, phase: false, hoverPx: null, buf: null,
+          f1: null, f2: null },
+  tf: { phase: true, stages: true, markers: true, harm: true, hoverF: null },
+  harm: { n: 15, parts: true, sum: true, pred: true, meas: true }
+};
+var BUF = 1 << 18;
+var total = 0;                       /* absolute sample counter */
+var probes = [];                     /* one ring buffer per stage output */
+var compiled = [];
+var source = null;
+
+/* ---------------- stage schema ---------------- */
+var WAVES = [['sine', 'Sine'], ['square', 'Square / pulse'], ['triangle', 'Triangle'], ['saw', 'Sawtooth'],
+             ['prbs', 'PRBS (NRZ)'], ['ook', 'OOK (PRBS on carrier)'], ['twotone', 'Two tone'],
+             ['noise', 'Noise'], ['dc', 'DC'],
+  ['iq', 'IQ (quadrature carrier)']];
+var isLevel = function (w) { return w === 'square' || w === 'prbs' || w === 'ook'; };
+var isDigital = function (w) { return w === 'prbs' || w === 'ook'; };
+
+var SCHEMA = {
+  source: { name: 'Source', fields: [
+    { k: 'wave', t: 'sel', label: 'Waveform', opts: WAVES, rebuild: true },
+    { k: 'amp', label: 'Amplitude', unit: 'V', min: 0.001, max: 10, log: true },
+    { k: 'freq', label: 'Frequency', unit: 'Hz', min: 1, max: 'nyq', log: true,
+      show: function (s) { return s.wave !== 'dc' && s.wave !== 'noise' && s.wave !== 'prbs' && s.wave !== 'ook' && s.wave !== 'iq'; } },
+    { k: 'f2', label: 'Second tone', unit: 'Hz', min: 1, max: 'nyq', log: true, show: function (s) { return s.wave === 'twotone'; } },
+    { k: 'amp2', label: 'Second amplitude', unit: 'V', min: 0, max: 10, log: false, show: function (s) { return s.wave === 'twotone'; } },
+    { k: 'duty', label: 'Duty cycle', unit: '%', min: 1, max: 99, log: false, show: function (s) { return s.wave === 'square'; } },
+    { k: 'bitrate', label: 'Bit rate', unit: 'bit/s', min: 100, max: 'nyq', log: true, show: function (s) { return isDigital(s.wave); } },
+    { k: 'prbsOrder', t: 'sel', label: 'PRBS order', opts: [[7, 'PRBS-7'], [9, 'PRBS-9'], [11, 'PRBS-11'], [15, 'PRBS-15'], [23, 'PRBS-23'], [31, 'PRBS-31']],
+      show: function (s) { return isDigital(s.wave); } },
+    { k: 'carrier', label: 'Carrier', unit: 'Hz', min: 1e3, max: 'nyq', log: true, show: function (s) { return s.wave === 'ook' || s.wave === 'iq'; } },
+    { k: 'iAmp', label: 'I level', unit: 'V', min: -2, max: 2, show: function (s) { return s.wave === 'iq'; } },
+    { k: 'qAmp', label: 'Q level', unit: 'V', min: -2, max: 2, show: function (s) { return s.wave === 'iq'; } },
+    { k: 'offset', label: 'DC offset', unit: 'V', min: -5, max: 5, log: false },
+    { k: 'unipolar', t: 'chk', label: 'Unipolar levels (0 / A)', show: function (s) { return s.wave === 'square' || s.wave === 'prbs'; } },
+    { k: 'rise', label: 'Rise / fall time (10–90 %)', unit: 's', min: 1e-12, max: 1e-4, log: true, show: function (s) { return isLevel(s.wave); } },
+    { k: 'ringAmp', label: 'Ringing amplitude', unit: '% of step', min: 0, max: 80, log: false, show: function (s) { return isLevel(s.wave); } },
+    { k: 'ringFreq', label: 'Ringing frequency', unit: 'Hz', min: 1e3, max: 'nyq', log: true, show: function (s) { return isLevel(s.wave) && s.ringAmp > 0; } },
+    { k: 'ringDecay', label: 'Ringing decay τ', unit: 's', min: 1e-9, max: 1e-3, log: true, show: function (s) { return isLevel(s.wave) && s.ringAmp > 0; } }
+  ] },
+  gain: { name: 'Amplifier', fields: [
+    { k: 'db', label: 'Gain', unit: 'dB', min: -80, max: 60, log: false },
+    { k: 'rsrc', label: 'Output impedance', unit: 'Ω', min: 0.1, max: 1e6, log: true },
+    { k: 'rload', label: 'Load impedance', unit: 'Ω', min: 1, max: 1e7, log: true },
+    { k: 'clip', t: 'chk', label: 'Saturation', rebuild: true },
+    { k: 'vmax', label: 'Clip level', unit: 'V', min: 0.01, max: 20, log: true, show: function (s) { return s.clip; } },
+    { k: 'soft', t: 'chk', label: 'Soft (tanh) compression', show: function (s) { return s.clip; } }
+  ] },
+  filter: { name: 'Filter', fields: [
+    { k: 'resp', t: 'sel', label: 'Response', rebuild: true,
+      opts: [['lp', 'Low-pass (max bandwidth)'], ['hp', 'High-pass (min bandwidth)'], ['bp', 'Band-pass (min + max)'], ['notch', 'Notch']] },
+    { k: 'family', t: 'sel', label: 'Family', opts: [['iir', 'Butterworth (IIR, min-phase)'], ['fir', 'Linear-phase FIR (windowed-sinc)']] },
+    { k: 'flo', label: 'Low cutoff', unit: 'Hz', min: 1, max: 'nyq', log: true, show: function (s) { return s.resp !== 'lp'; } },
+    { k: 'fhi', label: 'High cutoff', unit: 'Hz', min: 1, max: 'nyq', log: true, show: function (s) { return s.resp === 'lp' || s.resp === 'bp' || (s.family === 'fir' && s.resp === 'notch'); } },
+    { k: 'order', label: 'Order (Butterworth)', unit: '', min: 1, max: 16, log: false, step: 1, show: function (s) { return s.resp !== 'notch' && s.family !== 'fir'; } },
+    { k: 'taps', label: 'Taps (impulse length)', unit: '', min: 31, max: 511, log: false, step: 2, show: function (s) { return s.family === 'fir'; } },
+    { k: 'q', label: 'Notch Q', unit: '', min: 0.5, max: 50, log: true, show: function (s) { return s.resp === 'notch' && s.family !== 'fir'; } }
+  ] },
+  bwlimit: { name: 'BW limit', fields: [
+    { k: 'hasHi', t: 'chk', label: 'Has a maximum rated frequency', rebuild: true },
+    { k: 'fmax', label: 'Max rated frequency', unit: 'Hz', min: 10, max: 'nyq', log: true, show: function (s) { return s.hasHi; } },
+    { k: 'hasLo', t: 'chk', label: 'AC-coupled (minimum rated frequency)', rebuild: true },
+    { k: 'fmin', label: 'Min rated frequency', unit: 'Hz', min: 1, max: 'nyq', log: true, show: function (s) { return s.hasLo; } },
+    { k: 'bwOrder', label: 'Roll-off order (poles per edge)', unit: '', min: 1, max: 4, log: false, step: 1 }
+  ] },
+  passive: { name: 'R / L / C', fields: [
+    { k: 'topo', t: 'sel', label: 'Network', rebuild: true, opts: [
+      ['rc_lp', 'Series R → shunt C'], ['cr_hp', 'Series C → shunt R'],
+      ['lr_lp', 'Series L → shunt R'], ['rl_hp', 'Series R → shunt L'],
+      ['rlc_lp', 'Series RLC, tap across C'], ['rlc_bp', 'Series RLC, tap across R'],
+      ['rlc_hp', 'Series RLC, tap across L'], ['notch', 'Series LC trap to ground'] ] },
+    { k: 'R', label: 'Resistance', unit: 'Ω', min: 0.1, max: 1e6, log: true },
+    { k: 'L', label: 'Inductance', unit: 'H', min: 1e-9, max: 1, log: true, show: function (s) { return s.topo !== 'rc_lp' && s.topo !== 'cr_hp'; } },
+    { k: 'C', label: 'Capacitance', unit: 'F', min: 1e-13, max: 1e-3, log: true, show: function (s) { return s.topo !== 'lr_lp' && s.topo !== 'rl_hp'; } }
+  ] },
+  noise: { name: 'Noise', fields: [
+    { k: 'rms', label: 'RMS level', unit: 'V', min: 1e-6, max: 2, log: true },
+    { k: 'pink', t: 'chk', label: '1/f (pink) instead of white' }
+  ] }
+};
+var DEFAULTS = {
+  source: { type: 'source', wave: 'square', amp: 1, freq: 100e3, offset: 0, duty: 50, rise: 100e-9,
+            ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 1e6, prbsOrder: 7, carrier: 2e6,
+            unipolar: false, f2: 150e3, amp2: 0.5, iAmp: 0.7, qAmp: 0.7 },
+  gain:    { type: 'gain', db: 0, rsrc: 50, rload: 1e6, clip: false, vmax: 1, soft: false },
+  filter:  { type: 'filter', resp: 'lp', family: 'iir', taps: 129, flo: 10e3, fhi: 500e3, order: 2, q: 5 },
+  bwlimit: { type: 'bwlimit', hasLo: false, fmin: 20, hasHi: true, fmax: 2e6, bwOrder: 1 },
+  passive: { type: 'passive', topo: 'rc_lp', R: 1000, L: 100e-6, C: 100e-12 },
+  noise:   { type: 'noise', rms: 0.01, pink: false }
+};
+function mkStage(type) {
+  var s = JSON.parse(JSON.stringify(DEFAULTS[type]));
+  s.id = Math.random().toString(36).slice(2, 8);
+  s.open = true; s.probe = true; s.bypass = false;
+  return s;
+}
+
+/* ---------------- chain compile ---------------- */
+function rebuildChain() {
+  S.spec._sp = null; S.epoch = total;
+  compiled = S.stages.map(function (st) {
+    var c = DSP.compileStage(st, S.fs);
+    c.bypass = st.bypass;
+    return c;
+  });
+  source = DSP.makeSource(S.stages[0], S.fs);
+  while (probes.length < S.stages.length) probes.push(new Float32Array(BUF));
+  probes.length = S.stages.length;
+  refreshTraceSelectors();
+}
+function resetBuffers() {
+  S.spec._sp = null; S.epoch = 0;
+  total = 0;
+  probes.forEach(function (p) { p.fill(0); });
+  S.spec.buf = null;
+  rebuildChain();
+}
+function nyq() { return S.fs / 2; }
+
+/* ---------------- simulation ---------------- */
+var lastT = 0;
+function stepSim(dtMs) {
+  var want = S.fs * (dtMs / 1000) * S.speed + S.carry;
+  var n = Math.min(1 << 16, Math.floor(want));
+  S.carry = clamp(want - n, 0, 4);        /* sub-sample remainder survives the frame */
+  if (n <= 0) return;
+  stepN(n);
+}
+function stepN(n) {
+  var src = new Float64Array(n);
+  DSP.sourceRender(source, src, n);
+  var i, j, v;
+  for (i = 0; i < n; i++) {
+    v = src[i];
+    var idx = (total + i) & (BUF - 1);
+    probes[0][idx] = v;
+    for (j = 1; j < compiled.length; j++) {
+      if (!compiled[j].bypass) v = DSP.processStage(compiled[j], v);
+      probes[j][idx] = v;
+    }
+  }
+  total += n;
+}
+/* one triggered sweep, then stop: capture is complete when a fresh edge sits a
+   full half-window before "now" so the post-trigger half is already in memory */
+function singleDone(W) {
+  if (S.armAt > total) S.armAt = 0;                   /* buffers were cleared after arming */
+  if (S.scope.roll || S.scope.trig === 'off') return total - S.armAt >= W;
+  var tr = findTrigger(W);
+  if (tr !== null && tr > S.armAt && total - tr >= Math.ceil(W / 2) + 2) return true;
+  return total - S.armAt >= 3 * W;                    /* no edge found: settle for full windows */
+}
+function at(p, i) { return p[i & (BUF - 1)]; }
+
+/* ---------------- canvas plumbing ---------------- */
+function fitCanvas(cv) {
+  var r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  var w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  var g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { g: g, w: r.width, h: r.height };
+}
+function gridStyle(g) { g.strokeStyle = 'rgba(120,160,180,.13)'; g.lineWidth = 1; }
+function label(g, txt, x, y, col, align, size) {
+  g.fillStyle = col; g.font = (size || 10) + 'px ' + cssVar('--f-data');
+  g.textAlign = align || 'left'; g.textBaseline = 'middle';
+  g.fillText(txt, x, y);
+}
+/* --- continued --- */
+
+/* ================= chain editor ================= */
+function fieldMax(f) { return f.max === 'nyq' ? nyq() : f.max; }
+function buildField(st, f, idx) {
+  var wrap = document.createElement('div'); wrap.className = 'f';
+  if (f.t === 'chk') {
+    var l = document.createElement('label'); l.className = 'chk';
+    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!st[f.k];
+    cb.onchange = function () { st[f.k] = cb.checked; onStageEdit(idx, f.rebuild); };
+    l.appendChild(cb); l.appendChild(document.createTextNode(f.label));
+    wrap.appendChild(l); return wrap;
+  }
+  var head = document.createElement('div'); head.className = 'f-lab';
+  var sp = document.createElement('span'); sp.textContent = f.label; head.appendChild(sp);
+  if (f.t === 'sel') {
+    var selEl = document.createElement('select');
+    f.opts.forEach(function (o) {
+      var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1];
+      if (String(st[f.k]) === String(o[0])) op.selected = true;
+      selEl.appendChild(op);
+    });
+    selEl.onchange = function () {
+      var v = selEl.value; st[f.k] = (isNaN(+v) || v === '') ? v : +v;
+      onStageEdit(idx, true);
+    };
+    wrap.appendChild(head); wrap.appendChild(selEl); return wrap;
+  }
+  var box = document.createElement('input'); box.type = 'text';
+  box.value = f.unit === '%' || f.unit === 'dB' || f.unit === '' ? (+st[f.k]).toFixed(f.step === 1 ? 0 : 2) : si(st[f.k], f.unit);
+  head.appendChild(box);
+  var rng = document.createElement('input'); rng.type = 'range';
+  var lo = f.min, hi = fieldMax(f);
+  rng.min = 0; rng.max = 1000; rng.step = 1;
+  var toSlider = function (v) {
+    v = clamp(v, lo, hi);
+    return f.log ? 1000 * (log10(v / lo) / log10(hi / lo)) : 1000 * (v - lo) / (hi - lo);
+  };
+  var fromSlider = function (p) {
+    return f.log ? lo * Math.pow(hi / lo, p / 1000) : lo + (hi - lo) * p / 1000;
+  };
+  rng.value = toSlider(st[f.k]);
+  var syncBox = function () {
+    box.value = (f.unit === '%' || f.unit === 'dB' || f.unit === '') ? (+st[f.k]).toFixed(f.step === 1 ? 0 : 2) : si(st[f.k], f.unit);
+  };
+  rng.oninput = function () {
+    var v = fromSlider(+rng.value);
+    if (f.step === 1) v = Math.round(v);
+    st[f.k] = v; syncBox(); onStageEdit(idx, false);
+  };
+  box.onchange = function () {
+    var v = parseSI(box.value, st[f.k]);
+    st[f.k] = clamp(v, lo, hi); if (f.step === 1) st[f.k] = Math.round(st[f.k]);
+    rng.value = toSlider(st[f.k]); syncBox(); onStageEdit(idx, f.rebuild);
+  };
+  wrap.appendChild(head); wrap.appendChild(rng);
+  return wrap;
+}
+
+function stageNote(st, c) {
+  var out = [];
+  if (st.type === 'gain') {
+    out.push('Gain <b>' + (+st.db).toFixed(1) + ' dB</b> · divider <b>' + c.meta.dividerDb.toFixed(2) + ' dB</b> · net <b>' + c.meta.totalDb.toFixed(2) + ' dB</b>');
+    out.push('Load sees ' + si(st.rload, 'Ω') + ' across ' + si(st.rsrc, 'Ω') + ' source.');
+    if (st.clip) out.push('Clipping at ±' + si(st.vmax, 'V') + (st.soft ? ' (tanh)' : ' (hard)') + ' — nonlinear, excluded from H(f).');
+  } else if (st.type === 'filter') {
+    if (st.family === 'fir') {
+      var gd = (st.taps - 1) / 2 / S.fs;
+      out.push('Linear phase: <b>every</b> frequency is delayed by the same (N−1)/2 = <b>' + si(gd, 's') + '</b> — a pure delay, so the waveform shape is preserved.');
+      out.push('Transition width ≈ 3.3·fs/N = ' + si(3.3 * S.fs / st.taps, 'Hz') + ' (Hamming). More taps = sharper edge, longer delay.');
+    }
+    if (st.resp === 'bp') out.push('Pass band <b>' + si(st.flo, 'Hz') + ' … ' + si(st.fhi, 'Hz') + '</b>' + (st.family === 'fir' ? '' : ', ' + st.order + ' pole' + (st.order > 1 ? 's' : '') + ' each edge (' + (6.02 * st.order).toFixed(0) + ' dB/oct)'));
+    else if (st.resp === 'notch') out.push('Null at <b>' + si(st.flo, 'Hz') + '</b>' + (st.family === 'fir' ? ' … ' + si(st.fhi, 'Hz') : ', Q = ' + (+st.q).toFixed(1) + ' → BW ' + si(st.flo / st.q, 'Hz')));
+    else if (st.family !== 'fir') out.push('−3 dB at <b>' + si(st.resp === 'lp' ? st.fhi : st.flo, 'Hz') + '</b> · ' + (6.02 * st.order).toFixed(0) + ' dB/oct · minimum-phase: group delay varies with frequency, so waveform shape is <b>not</b> preserved near cutoff.');
+    var fc = st.resp === 'lp' ? st.fhi : st.flo;
+    if (fc > S.fs / 2) out.push('<b style="color:var(--warn)">Cutoff is above Nyquist (' + si(S.fs / 2, 'Hz') + ') — raise the sample rate.</b>');
+  } else if (st.type === 'bwlimit') {
+    out.push('Models a component rated for <b>' + (st.hasLo ? si(st.fmin, 'Hz') : 'DC') + ' … ' + (st.hasHi ? si(st.fmax, 'Hz') : 'Nyquist') + '</b> (' + (6.02 * st.bwOrder).toFixed(0) + ' dB/oct beyond).');
+    if (st.hasHi) {
+      out.push('Rise-time floor 0.35/BW = <b>' + si(0.35 / st.fmax, 's') + '</b> — edges through it cannot be faster.');
+      var s0b = S.stages[0];
+      if (s0b && isLevel(s0b.wave) && s0b.rise > 0 && 0.35 / s0b.rise > st.fmax)
+        out.push('<b style="color:var(--warn)">Signal edge knee 0.35/t<sub>r</sub> = ' + si(0.35 / s0b.rise, 'Hz') + ' exceeds the rating — edges will slow to ~' + si(Math.sqrt(s0b.rise * s0b.rise + Math.pow(0.35 / st.fmax, 2)), 's') + '.</b>');
+    }
+    if (st.hasLo) {
+      var f0b = fundamental();
+      if (f0b > 0 && f0b < 10 * st.fmin)
+        out.push('<b style="color:var(--warn)">AC coupling at ' + si(st.fmin, 'Hz') + ' vs f\u2080 ' + si(f0b, 'Hz') + ' — flat tops droop \u2248 ' + (Math.PI * st.fmin / f0b * 100).toFixed(1) + ' % per half-period (baseline wander).</b>');
+      else out.push('AC-coupled: DC and slow content below ' + si(st.fmin, 'Hz') + ' is blocked.');
+    }
+  } else if (st.type === 'passive') {
+    var m = c.meta;
+    out.push(m.label + (m.fc ? ' · f₀ <b>' + si(m.fc, 'Hz') + '</b>' : '') + (m.Q ? ' · Q <b>' + m.Q.toFixed(2) + '</b>' : '') + ' · ' + m.slope);
+    if (m.Q) out.push('−3 dB bandwidth ' + si(m.fc / m.Q, 'Hz') + ' · peaking ' + (20 * log10(m.Q)).toFixed(1) + ' dB');
+    if (m.aliased) out.push('<b style="color:var(--warn)">f₀ is above Nyquist — raise the sample rate.</b>');
+    else if (m.warped) out.push('<b style="color:var(--amber)">f₀ &gt; f<sub>s</sub>/20: response away from f₀ deviates from the analog network.</b>');
+  } else if (st.type === 'noise') {
+    out.push('RMS <b>' + si(st.rms, 'V') + '</b> (' + (20 * log10(st.rms)).toFixed(1) + ' dBV) · ' + (st.pink ? '1/f' : 'white, flat to ' + si(S.fs / 2, 'Hz')));
+    out.push('Density ' + si(st.rms / Math.sqrt(S.fs / 2), 'V/√Hz'));
+  } else if (st.type === 'source') {
+    var f0 = fundamental();
+    if (st.wave === 'ook') out.push('Carrier ' + si(st.carrier, 'Hz') + ' · ' + si(st.bitrate, 'bit/s') + ' · main lobe ±' + si(st.bitrate, 'Hz') + ' around the carrier');
+    else if (st.wave === 'prbs') out.push(si(st.bitrate, 'bit/s') + ' NRZ · first spectral null at ' + si(st.bitrate, 'Hz') + ' · period ' + (Math.pow(2, st.prbsOrder) - 1) + ' bits');
+    else if (f0) out.push('Fundamental <b>' + si(f0, 'Hz') + '</b>' + (st.wave === 'square' ? ' · odd harmonics fall as 1/k' : st.wave === 'triangle' ? ' · odd harmonics fall as 1/k²' : ''));
+    if (isLevel(st.wave)) {
+      out.push('Edge ' + si(st.rise, 's') + ' → knee at 0.35/t<sub>r</sub> = <b>' + si(0.35 / st.rise, 'Hz') + '</b>');
+      var W = DSP.riseToWindow(st.rise, S.fs);
+      if (W < 8) out.push('<b style="color:var(--warn)">Edge spans only ' + W.toFixed(1) + ' samples — raise the sample rate to resolve it.</b>');
+      var halfT = (st.wave === 'square') ? Math.min(st.duty, 100 - st.duty) / 100 / Math.max(1, st.freq)
+                                         : 1 / Math.max(1, st.bitrate);
+      var edgeSpan = st.rise / 0.4822;   /* 10–90 % rise → full 0–100 % edge window */
+      if (edgeSpan >= halfT) out.push('<b style="color:var(--warn)">Rise time ' + si(st.rise, 's') +
+        ' \u2265 the ' + si(halfT, 's') + ' level dwell — the edge never completes, so the wave degenerates toward a sine and never reaches its levels. For a square shape keep t<sub>r</sub> below ~' +
+        si(halfT * 0.2, 's') + '.</b>');
+      if (st.ringAmp > 0) out.push('Ringing ' + si(st.ringFreq, 'Hz') + ' at ' + st.ringAmp + ' %, τ = ' + si(st.ringDecay, 's') + ' (settles in ~' + si(5 * st.ringDecay, 's') + ')');
+    }
+  }
+  return out.join('<br>');
+}
+
+function drawSpark(cv, idx) {
+  var d = fitCanvas(cv), g = d.g, w = d.w, h = d.h;
+  g.clearRect(0, 0, w, h);
+  var c = compiled[idx];
+  if (!c) return;
+  if (idx === 0 || !c.sections.length) {           /* show the stage's own output slice */
+    var W = Math.min(total, 600), i0 = total - W;
+    if (W < 4) return;
+    g.strokeStyle = cssVar(CH[idx % CH.length]); g.lineWidth = 1; g.beginPath();
+    var mx = 1e-9;
+    for (var i = 0; i < W; i++) mx = Math.max(mx, Math.abs(at(probes[idx], i0 + i)));
+    for (i = 0; i < W; i++) {
+      var x = i / (W - 1) * w, y = h / 2 - at(probes[idx], i0 + i) / mx * (h / 2 - 2);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke(); return;
+  }
+  var fmin = 10, fmax = S.fs / 2, N = 90, top = 12, bot = -60;
+  g.strokeStyle = cssVar(CH[idx % CH.length]); g.lineWidth = 1.2; g.beginPath();
+  for (var k = 0; k < N; k++) {
+    var f = fmin * Math.pow(fmax / fmin, k / (N - 1));
+    var db = DSP.db(DSP.cmag(DSP.stageResp(c, f, S.fs)));
+    var xx = k / (N - 1) * w, yy = h - (clamp(db, bot, top) - bot) / (top - bot) * h;
+    k ? g.lineTo(xx, yy) : g.moveTo(xx, yy);
+  }
+  g.stroke();
+  g.strokeStyle = 'rgba(120,160,180,.22)'; g.beginPath();
+  var y0 = h - (0 - bot) / (top - bot) * h; g.moveTo(0, y0); g.lineTo(w, y0); g.stroke();
+}
+
+function renderChain() {
+  var list = $('chain'); list.innerHTML = '';
+  S.stages.forEach(function (st, i) {
+    var li = document.createElement('li');
+    li.className = 'stage' + (st.bypass ? ' bypassed' : '') + (st.probe ? ' live' : '');
+    var card = document.createElement('div'); card.className = 'card' + (st.open ? ' open' : '');
+    var head = document.createElement('div'); head.className = 'card-head';
+    var led = document.createElement('span'); led.className = 'led' + (st.probe ? ' on' : '');
+    led.style.color = cssVar(CH[i % CH.length]);
+    led.title = 'Show this node on the scope';
+    led.onclick = function (e) { e.stopPropagation(); st.probe = !st.probe; renderChain(); };
+    var idxEl = document.createElement('span'); idxEl.className = 'idx'; idxEl.textContent = i;
+    var kind = document.createElement('span'); kind.className = 'kind';
+    kind.textContent = SCHEMA[st.type].name;
+    var tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = summary(st);
+    var tools = document.createElement('div'); tools.className = 'card-tools';
+    function tbtn(txt, title, fn, on) {
+      var b = document.createElement('button'); b.className = 'btn icon sm' + (on ? ' on' : '');
+      b.textContent = txt; b.title = title;
+      b.onclick = function (e) { e.stopPropagation(); fn(); };
+      tools.appendChild(b); return b;
+    }
+    if (i > 0) {
+      tbtn('↑', 'Move earlier', function () { if (i > 1) { var t = S.stages[i]; S.stages[i] = S.stages[i - 1]; S.stages[i - 1] = t; resetBuffers(); renderChain(); } });
+      tbtn('↓', 'Move later', function () { if (i < S.stages.length - 1) { var t = S.stages[i]; S.stages[i] = S.stages[i + 1]; S.stages[i + 1] = t; resetBuffers(); renderChain(); } });
+      tbtn('∅', st.bypass ? 'Enable stage' : 'Bypass stage', function () { st.bypass = !st.bypass; resetBuffers(); renderChain(); }, st.bypass);
+      tbtn('×', 'Remove stage', function () { S.stages.splice(i, 1); resetBuffers(); renderChain(); });
+    }
+    head.appendChild(led); head.appendChild(idxEl); head.appendChild(kind); head.appendChild(tag); head.appendChild(tools);
+    head.onclick = function () { st.open = !st.open; renderChain(); };
+    card.appendChild(head);
+    var spark = document.createElement('canvas'); spark.className = 'spark';
+    card.appendChild(spark);
+    var body = document.createElement('div'); body.className = 'card-body';
+    SCHEMA[st.type].fields.forEach(function (f) {
+      if (f.show && !f.show(st)) return;
+      body.appendChild(buildField(st, f, i));
+    });
+    var note = document.createElement('p'); note.className = 'note'; note.id = 'note-' + st.id;
+    note.innerHTML = stageNote(st, compiled[i] || DSP.compileStage(st, S.fs));
+    body.appendChild(note);
+    card.appendChild(body);
+    li.appendChild(card); list.appendChild(li);
+    st._spark = spark;
+  });
+  $('chainCount').textContent = S.stages.length + ' stages';
+  refreshTraceSelectors();
+}
+function summary(st) {
+  if (st.type === 'source') {
+    var w = WAVES.filter(function (o) { return o[0] === st.wave; })[0];
+    var f = isDigital(st.wave) ? si(st.bitrate, 'bit/s') : si(st.freq, 'Hz');
+    return (w ? w[1] : st.wave) + ' · ' + f + ' · ' + si(st.amp, 'Vpk');
+  }
+  if (st.type === 'gain') return (st.db >= 0 ? '+' : '') + (+st.db).toFixed(1) + ' dB · ' + si(st.rsrc, 'Ω') + '→' + si(st.rload, 'Ω');
+  if (st.type === 'filter') {
+    var tail = st.family === 'fir' ? ' · FIR ' + st.taps + 't' : ' · n=' + st.order;
+    return st.resp === 'bp' ? si(st.flo, '') + '–' + si(st.fhi, 'Hz') + tail
+      : st.resp === 'notch' ? 'notch ' + si(st.flo, 'Hz') + (st.family === 'fir' ? tail : '')
+      : (st.resp === 'lp' ? '< ' + si(st.fhi, 'Hz') : '> ' + si(st.flo, 'Hz')) + tail;
+  }
+  if (st.type === 'bwlimit') {
+    var pp = [];
+    if (st.hasLo) pp.push('> ' + si(st.fmin, 'Hz'));
+    if (st.hasHi) pp.push('< ' + si(st.fmax, 'Hz'));
+    return (pp.length ? pp.join(' · ') : 'no limits') + ' · n=' + st.bwOrder;
+  }
+  if (st.type === 'passive') return si(st.R, 'Ω') + (st.topo.indexOf('l') >= 0 || st.topo.indexOf('rlc') === 0 ? ' · ' + si(st.L, 'H') : '') + ' · ' + si(st.C, 'F');
+  if (st.type === 'noise') return si(st.rms, 'Vrms') + (st.pink ? ' · 1/f' : ' · white');
+  return '';
+}
+function onStageEdit(idx, rebuild) {
+  rebuildChain();
+  var st = S.stages[idx], n = $('note-' + st.id);
+  if (n) n.innerHTML = stageNote(st, compiled[idx]);
+  var head = document.querySelectorAll('#chain .card-head .tag')[idx];
+  if (head) head.textContent = summary(st);
+  if (rebuild) renderChain();
+}
+function fundamental() {
+  var s = S.stages[0];
+  if (!s) return 0;
+  if (s.wave === 'ook' || s.wave === 'iq') return s.carrier;
+  if (s.wave === 'prbs') return s.bitrate;
+  if (s.wave === 'noise' || s.wave === 'dc') return 0;
+  return s.freq;
+}
+function refreshTraceSelectors() {
+  var host = $('traceChips');
+  if (host) {
+    host.innerHTML = '';
+    S.stages.forEach(function (st, i) {
+      var col = (COL.ch && COL.ch.length) ? COL.ch[i % COL.ch.length] : '#888';
+      var c = document.createElement('span');
+      c.className = 'chip' + (st.probe ? '' : ' off');
+      c.style.borderColor = col;
+      c.innerHTML = '<i style="background:' + col + '"></i>' + i + ' ' + SCHEMA[st.type].name;
+      c.onclick = function () { st.probe = !st.probe; renderChain(); };
+      host.appendChild(c);
+    });
+  }
+  [['trigSrc', S.scope, 'src'], ['specSrc', S.spec, 'src']].forEach(function (t) {
+    var el = $(t[0]); if (!el) return;
+    var cur = t[1][t[2]];
+    el.innerHTML = '';
+    S.stages.forEach(function (st, i) {
+      var o = document.createElement('option'); o.value = i;
+      o.textContent = i + ' · ' + SCHEMA[st.type].name;
+      el.appendChild(o);
+    });
+    if (cur === null || cur === undefined || cur >= S.stages.length) cur = S.stages.length - 1;
+    t[1][t[2]] = cur; el.value = cur;
+    el.onchange = function () { t[1][t[2]] = +el.value; S.spec.buf = null; };
+  });
+}
+
+/* ================= cached colours ================= */
+var COL = {};
+function initColors() {
+  ['--ink', '--ink-dim', '--ink-faint', '--amber', '--warn', '--ok', '--screen'].forEach(function (k) { COL[k] = cssVar(k); });
+  COL.ch = CH.map(cssVar);
+  COL.font = cssVar('--f-data');
+}
+function lab(g, txt, x, y, col, align, size) {
+  g.fillStyle = col; g.font = (size || 10) + 'px ' + COL.font;
+  g.textAlign = align || 'left'; g.textBaseline = 'middle'; g.fillText(txt, x, y);
+}
+
+/* ================= oscilloscope ================= */
+var persistCv = document.createElement('canvas');
+function findTrigger(W) {
+  var sc = S.scope;
+  if (sc.trig === 'off') return total - Math.ceil(W / 2);
+  var p = probes[sc.src] || probes[0];
+  var latest = total - Math.ceil(W / 2) - 1;
+  var oldest = Math.max(total - BUF + 2, W);
+  var span = Math.min(latest - oldest, Math.max(W * 3, 8000));
+  var lvl = sc.level, dir = sc.edge;
+  for (var i = latest; i > latest - span; i--) {
+    var a = at(p, i - 1), b = at(p, i);
+    if (dir > 0 ? (a <= lvl && b > lvl) : (a >= lvl && b < lvl)) return i;
+  }
+  return sc.trig === 'normal' ? null : total - Math.ceil(W / 2);
+}
+/* Eye diagram: fold every probed trace on two unit intervals of the source
+   bit clock (or two half-periods for a square). Inter-symbol interference from
+   bandwidth limiting shows up directly as the eye closing. */
+function eyeUI() {
+  var s = S.stages[0]; if (!s) return 0;
+  if (s.wave === 'prbs' || s.wave === 'ook') return S.fs / s.bitrate;
+  if (s.wave === 'square') return S.fs / (2 * s.freq);
+  return 0;
+}
+function drawEye(g, w, h, sc) {
+  var UI = eyeUI(), span = 2 * UI;
+  var sweeps = Math.min(160, Math.floor((Math.min(total, BUF - 4) - 2) / span));
+  if (sweeps < 2 || span < 4) { lab(g, 'eye needs a square / PRBS / OOK source', w / 2, h / 2, COL['--ink-faint'], 'center'); return; }
+  /* UI boundary + sampling-instant markers */
+  g.strokeStyle = 'rgba(120,160,180,.35)'; g.setLineDash([4, 4]); g.beginPath();
+  [0.25, 0.75].forEach(function (fx) { g.moveTo(fx * w, 0); g.lineTo(fx * w, h); });
+  g.stroke(); g.setLineDash([]);
+  var first = total - sweeps * span;
+  var eyesMid = [], eyesHi = [], eyesLo = [];
+  S.stages.forEach(function (st, si2) {
+    if (!st.probe) return;
+    var p = probes[si2], col = COL.ch[si2 % COL.ch.length];
+    g.strokeStyle = col; g.lineWidth = 1; g.globalAlpha = Math.max(0.10, 2.2 / sweeps);
+    for (var s2 = 0; s2 < sweeps; s2++) {
+      var i0 = Math.round(first + s2 * span);
+      g.beginPath();
+      for (var k = 0; k <= span; k++) {
+        var y = h / 2 - at(p, i0 + k) / sc.vdiv * (h / 8);
+        var x = k / span * w;
+        k ? g.lineTo(x, clamp(y, -20, h + 20)) : g.moveTo(x, clamp(y, -20, h + 20));
+      }
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    /* eye opening at the sampling instant (centre of the first UI): split the
+       samples there into high/low rails around the median and measure the gap */
+    if (si2 === lastProbed()) {
+      var vals = [];
+      var halfWin = Math.max(1, Math.round(UI * 0.04));
+      for (var s3 = 0; s3 < sweeps; s3++) {
+        var c = Math.round(first + s3 * span + UI / 2);
+        for (var dk = -halfWin; dk <= halfWin; dk++) vals.push(at(probes[si2], c + dk));
+      }
+      vals.sort(function (a, b) { return a - b; });
+      var mid = vals[vals.length >> 1];
+      var hi = vals.filter(function (v) { return v > mid; }), lo = vals.filter(function (v) { return v <= mid; });
+      if (hi.length > 3 && lo.length > 3) {
+        var open = hi[0] - lo[lo.length - 1];
+        lab(g, 'eye ' + si(Math.max(0, open), 'V') + ' @ ' + si(UI / S.fs, 's') + '/UI', w / 2, 16, col, 'center');
+      }
+    }
+  });
+  lab(g, '2 UI', w - 8, 16, COL['--ink-dim'], 'right');
+}
+/* IQ / constellation view: demodulate every probed node at the source carrier
+   (multiply by cos/sin at fc, average over whole cycles) and plot Q against I.
+   Phase reference is the absolute sample clock, so the constellation is
+   coherent across the chain — a filter's phase shift shows up directly as a
+   rotation of the point. */
+function drawIQ(g, w, h, sc) {
+  var s0 = S.stages[0]; if (!s0) return;
+  var fc = (s0.wave === 'iq' || s0.wave === 'ook') ? s0.carrier : s0.freq;
+  if (!(fc > 0) || s0.wave === 'noise' || s0.wave === 'dc') {
+    lab(g, 'IQ plot needs a carrier or a periodic source', w / 2, h / 2, COL['--ink-faint'], 'center'); return;
+  }
+  var spc = S.fs / fc;
+  if (spc < 4) { lab(g, 'carrier too close to Nyquist \u2014 raise the sample rate', w / 2, h / 2, COL['--ink-faint'], 'center'); return; }
+  var cyc = Math.max(1, Math.round(192 / spc));
+  var L = Math.max(4, Math.round(cyc * spc));
+  var segs = Math.min(48, Math.floor(Math.min(total, BUF - 4) / L) - 1);
+  if (segs < 2) { lab(g, 'collecting samples\u2026', w / 2, h / 2, COL['--ink-faint'], 'center'); return; }
+  var wrad = DSP.TAU * fc / S.fs, cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 26;
+  var all = [], maxA = 1e-9;
+  S.stages.forEach(function (st, si2) {
+    if (!st.probe) return;
+    var pts = [];
+    for (var s2 = segs - 1; s2 >= 0; s2--) {
+      var i0 = total - (s2 + 1) * L, I = 0, Q = 0;
+      for (var k2 = 0; k2 < L; k2++) {
+        var ang = (i0 + k2 - (S.epoch || 0)) * wrad, v = at(probes[si2], i0 + k2);
+        I += v * Math.cos(ang); Q -= v * Math.sin(ang);
+      }
+      I *= 2 / L; Q *= 2 / L;
+      pts.push([I, Q]);
+      var mA = Math.hypot(I, Q); if (mA > maxA) maxA = mA;
+    }
+    all.push([si2, pts]);
+  });
+  var full = Math.max(maxA * 1.25, 1e-6);
+  gridStyle(g); g.beginPath();
+  g.moveTo(cx - R, cy); g.lineTo(cx + R, cy); g.moveTo(cx, cy - R); g.lineTo(cx, cy + R); g.stroke();
+  g.strokeStyle = 'rgba(120,150,170,.18)';
+  [0.25, 0.5, 0.75, 1].forEach(function (rr) { g.beginPath(); g.arc(cx, cy, R * rr, 0, 6.2832); g.stroke(); });
+  lab(g, 'I', cx + R + 10, cy, COL['--ink-faint']);
+  lab(g, 'Q', cx, cy - R - 10, COL['--ink-faint'], 'center');
+  lab(g, 'full scale ' + si(full, 'V') + ' \u00b7 demod ' + si(fc, 'Hz') + ' \u00b7 ' + L + ' samples/point', 10, h - 8, COL['--ink-faint']);
+  all.forEach(function (e) {
+    var si2 = e[0], pts = e[1], col = COL.ch[si2 % COL.ch.length];
+    var X = function (p) { return cx + p[0] / full * R; }, Y = function (p) { return cy - p[1] / full * R; };
+    g.strokeStyle = col; g.globalAlpha = 0.35; g.lineWidth = 1; g.beginPath();
+    pts.forEach(function (p, i2) { i2 ? g.lineTo(X(p), Y(p)) : g.moveTo(X(p), Y(p)); });
+    g.stroke(); g.globalAlpha = 1;
+    var lp = pts[pts.length - 1];
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(X(lp), Y(lp)); g.stroke();
+    g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 8;
+    g.beginPath(); g.arc(X(lp), Y(lp), 3.5, 0, 6.2832); g.fill(); g.shadowBlur = 0;
+    if (si2 === lastProbed())
+      lab(g, 'I ' + si(lp[0], 'V') + '   Q ' + si(lp[1], 'V') + '   |A| ' + si(Math.hypot(lp[0], lp[1]), 'V') +
+        '   \u2220 ' + (Math.atan2(lp[1], lp[0]) * 180 / Math.PI).toFixed(1) + '\u00b0', w - 10, 16, col, 'right');
+  });
+}
+function lastProbed() {
+  var idx = -1;
+  S.stages.forEach(function (st, i) { if (st.probe) idx = i; });
+  return idx;
+}
+
+function drawScope() {
+  var cv = $('scopeCv'), d = fitCanvas(cv), g = d.g, w = d.w, h = d.h, sc = S.scope;
+  var W = Math.max(16, Math.min(BUF - 4, Math.round(sc.tdiv * 10 * S.fs)));
+  var start;
+  if (sc.roll && !sc.eye) {
+    start = Math.max(total - BUF + 2, total - W);     /* newest sample at the right edge */
+  } else {
+    var trig = findTrigger(W);
+    if (trig === null) trig = sc._lastTrig || (total - Math.ceil(W / 2));
+    sc._lastTrig = trig;
+    start = Math.round(trig - W / 2 - sc.hpos * sc.tdiv * S.fs);
+    start = Math.max(total - BUF + 2, Math.min(start, total - W));
+  }
+  sc._start = start; sc._W = W;
+
+  if (sc.persist) {
+    if (persistCv.width !== cv.width || persistCv.height !== cv.height) { persistCv.width = cv.width; persistCv.height = cv.height; }
+    var pg = persistCv.getContext('2d');
+    pg.globalCompositeOperation = 'source-over';
+    pg.fillStyle = 'rgba(7,11,15,0.12)';
+    pg.fillRect(0, 0, persistCv.width, persistCv.height);
+  }
+  g.clearRect(0, 0, w, h);
+  /* graticule */
+  gridStyle(g);
+  var i, x, y;
+  g.beginPath();
+  for (i = 0; i <= 10; i++) { x = Math.round(i * w / 10) + 0.5; g.moveTo(x, 0); g.lineTo(x, h); }
+  for (i = 0; i <= 8; i++) { y = Math.round(i * h / 8) + 0.5; g.moveTo(0, y); g.lineTo(w, y); }
+  g.stroke();
+  g.strokeStyle = 'rgba(120,160,180,.3)'; g.beginPath();
+  g.moveTo(0, Math.round(h / 2) + 0.5); g.lineTo(w, Math.round(h / 2) + 0.5);
+  g.moveTo(Math.round(w / 2) + 0.5, 0); g.lineTo(Math.round(w / 2) + 0.5, h); g.stroke();
+  /* trigger level marker */
+  var ty = h / 2 - sc.level / sc.vdiv * (h / 8);
+  if (!sc.roll && sc.trig !== 'off' && ty > 0 && ty < h) {
+    g.strokeStyle = 'rgba(242,169,59,.55)'; g.setLineDash([4, 4]); g.beginPath();
+    g.moveTo(0, ty); g.lineTo(w, ty); g.stroke(); g.setLineDash([]);
+    lab(g, 'T', w - 6, ty - 7, COL['--amber'], 'right', 9);
+  }
+  /* traces */
+  if (sc.iq) { drawIQ(g, w, h, sc); }
+  else if (sc.eye && eyeUI() > 0) { drawEye(g, w, h, sc); }
+  else {
+  var spp = W / w, stride = Math.max(1, Math.floor(spp / 250));
+  S.stages.forEach(function (st, si2) {
+    if (!st.probe) return;
+    var p = probes[si2], col = COL.ch[si2 % COL.ch.length];
+    var target = sc.persist ? persistCv.getContext('2d') : g;
+    if (sc.persist) { target.setTransform(cv.width / w, 0, 0, cv.height / h, 0, 0); }
+    target.strokeStyle = col; target.lineWidth = si2 === sc.src ? 1.7 : 1.3;
+    target.shadowColor = col; target.shadowBlur = 6; target.beginPath();
+    if (spp >= 2 && sc.env) {
+      for (var px = 0; px < w; px++) {
+        var i0 = start + Math.floor(px * spp), i1 = start + Math.floor((px + 1) * spp);
+        var mn = Infinity, mx = -Infinity;
+        for (var k = i0; k < i1; k += stride) { var v = at(p, k); if (v < mn) mn = v; if (v > mx) mx = v; }
+        if (mn === Infinity) continue;
+        var ya = h / 2 - mx / sc.vdiv * (h / 8), yb = h / 2 - mn / sc.vdiv * (h / 8);
+        target.moveTo(px + 0.5, clamp(ya, -20, h + 20)); target.lineTo(px + 0.5, clamp(yb, -20, h + 20));
+      }
+    } else {
+      var n = Math.min(W, Math.ceil(w * 3));
+      for (var j = 0; j < n; j++) {
+        var idx = start + Math.floor(j * W / n);
+        var xx = (idx - start) / W * w, yy = h / 2 - at(p, idx) / sc.vdiv * (h / 8);
+        j ? target.lineTo(xx, clamp(yy, -20, h + 20)) : target.moveTo(xx, clamp(yy, -20, h + 20));
+      }
+    }
+    target.stroke(); target.shadowBlur = 0;
+  });
+  }
+  if (sc.hoverPx && !sc.iq && !(sc.eye && eyeUI() > 0)) {
+    var hpx = clamp(sc.hoverPx.x, 0, w), hpy = clamp(sc.hoverPx.y, 0, h);
+    g.strokeStyle = 'rgba(203,215,225,.22)'; g.beginPath();
+    g.moveTo(hpx + 0.5, 0); g.lineTo(hpx + 0.5, h);
+    g.moveTo(0, hpy + 0.5); g.lineTo(w, hpy + 0.5); g.stroke();
+    var tRel = (hpx / w - 0.5) * 10 * sc.tdiv;
+    var vCur = (h / 2 - hpy) * sc.vdiv / (h / 8);
+    var sIdxH = Math.round(start + hpx / w * W);
+    var vTr = at(probes[sc.src] || probes[0], sIdxH);
+    var stxt = '\u25b8 t ' + (tRel >= 0 ? '+' : '\u2212') + si(Math.abs(tRel), 's') +
+      ' \u00b7 cursor ' + si(vCur, 'V') + ' \u00b7 ch' + sc.src + ' ' + si(vTr, 'V');
+    var stx = clamp(hpx + 12, 4, w - 250);
+    g.fillStyle = 'rgba(10,14,18,.85)'; g.fillRect(stx - 4, 22, 246, 16);
+    lab(g, stxt, stx, 30, COL['--ink'], 'left', 10);
+  }
+  if (sc.persist && !sc.iq && !(sc.eye && eyeUI() > 0)) g.drawImage(persistCv, 0, 0, w, h);
+  /* cursors */
+  if (sc.cursors) {
+    g.strokeStyle = COL['--ch2']; g.lineWidth = 1; g.setLineDash([3, 3]);
+    sc.cx.forEach(function (fx) { g.beginPath(); g.moveTo(fx * w, 0); g.lineTo(fx * w, h); g.stroke(); });
+    g.strokeStyle = COL['--ch3'];
+    sc.cy.forEach(function (fy) { g.beginPath(); g.moveTo(0, fy * h); g.lineTo(w, fy * h); g.stroke(); });
+    g.setLineDash([]);
+    var dt = Math.abs(sc.cx[1] - sc.cx[0]) * W / S.fs;
+    var dv = Math.abs(sc.cy[1] - sc.cy[0]) * 8 * sc.vdiv;
+    g.fillStyle = 'rgba(7,11,15,.8)'; g.fillRect(6, 6, 168, 46);
+    g.strokeStyle = 'rgba(120,160,180,.3)'; g.strokeRect(6.5, 6.5, 167, 45);
+    lab(g, 'Δt  ' + si(dt, 's'), 12, 17, COL['--ch2']);
+    lab(g, '1/Δt  ' + si(dt > 0 ? 1 / dt : 0, 'Hz'), 12, 30, COL['--ch2']);
+    lab(g, 'ΔV  ' + si(dv, 'V'), 12, 43, COL['--ch3']);
+  }
+  /* corner readouts */
+  lab(g, si(sc.tdiv, 's') + '/div', 8, h - 10, COL['--ink-dim']);
+  lab(g, si(sc.vdiv, 'V') + '/div', w - 8, h - 10, COL['--ink-dim'], 'right');
+  lab(g, sc.roll ? 'ROLL' : sc.trig === 'off' ? 'free run' : (sc.trig.toUpperCase() + ' ' + (sc.edge > 0 ? '↑' : '↓') + ' ' + si(sc.level, 'V')), w / 2, h - 10, COL['--ink-faint'], 'center');
+}
+
+/* ================= spectrum ================= */
+function grabWindow(idx, n) {
+  var p = probes[idx], out = new Float64Array(n), i0 = total - n;
+  if (total < n) return null;
+  for (var i = 0; i < n; i++) out[i] = at(p, i0 + i);
+  return out;
+}
+function specRange() {
+  var lo = S.spec.f1 || Math.max(S.fs / S.nfft, 1), hi = S.spec.f2 || S.fs / 2;
+  return [lo, hi];
+}
+function fToX(f, lo, hi, w) { return S.spec.log ? (log10(f / lo) / log10(hi / lo)) * w : (f - lo) / (hi - lo) * w; }
+function xToF(x, lo, hi, w) { return S.spec.log ? lo * Math.pow(hi / lo, x / w) : lo + (hi - lo) * x / w; }
+
+function drawSpectrum() {
+  var cv = $('specCv'), d = fitCanvas(cv), g = d.g, w = d.w, h = d.h;
+  g.clearRect(0, 0, w, h);
+  var idx = S.spec.src == null ? S.stages.length - 1 : S.spec.src;
+  var x = grabWindow(idx, S.nfft);
+  var top = S.spec.ref, bot = S.spec.ref - S.spec.range;
+  var r = specRange(), lo = r[0], hi = r[1];
+  var yOf = function (db) { return h - (clamp(db, bot, top) - bot) / (top - bot) * h; };
+  /* grid */
+  gridStyle(g); g.beginPath();
+  var dbStep = S.spec.range > 100 ? 20 : 10, dbv;
+  for (dbv = Math.ceil(bot / dbStep) * dbStep; dbv <= top; dbv += dbStep) {
+    var yy = Math.round(yOf(dbv)) + 0.5; g.moveTo(0, yy); g.lineTo(w, yy);
+  }
+  var dec, k;
+  if (S.spec.log) {
+    for (dec = Math.floor(log10(lo)); dec <= Math.ceil(log10(hi)); dec++) {
+      for (k = 1; k < 10; k++) {
+        var f = k * Math.pow(10, dec); if (f < lo || f > hi) continue;
+        var xx = Math.round(fToX(f, lo, hi, w)) + 0.5;
+        g.moveTo(xx, 0); g.lineTo(xx, h);
+      }
+    }
+  } else {
+    for (k = 0; k <= 10; k++) { var xl = Math.round(k * w / 10) + 0.5; g.moveTo(xl, 0); g.lineTo(xl, h); }
+  }
+  g.stroke();
+  for (dbv = Math.ceil(bot / dbStep) * dbStep; dbv <= top; dbv += dbStep) lab(g, dbv + ' dBV', 4, yOf(dbv) - 6, COL['--ink-faint'], 'left', 9);
+  if (S.spec.log) {
+    for (dec = Math.floor(log10(lo)); dec <= Math.ceil(log10(hi)); dec++) {
+      var fd = Math.pow(10, dec); if (fd < lo || fd > hi) continue;
+      lab(g, si(fd, 'Hz', 0), fToX(fd, lo, hi, w) + 3, h - 9, COL['--ink-faint'], 'left', 9);
+    }
+  } else {
+    for (k = 0; k <= 10; k += 2) lab(g, si(lo + (hi - lo) * k / 10, 'Hz', 1), k * w / 10 + 3, h - 9, COL['--ink-faint'], 'left', 9);
+  }
+  if (!x) { lab(g, 'filling buffer…', w / 2, h / 2, COL['--ink-faint'], 'center', 12); return; }
+
+  /* an FFT of 131072 points costs ~30 ms: recompute it at a cadence scaled to
+     its own measured cost and reuse the cached result between recomputes, so
+     the display stays at full frame rate at any size without a GPU */
+  var nowT = performance.now(), sp;
+  if (S.spec._sp && S.spec._sp.N === S.nfft && S.spec._src === idx && S.spec._win === S.win &&
+      S.spec._fs === S.fs && (nowT - S.spec._t) < Math.max(33, 5 * (S.spec._cost || 0))) {
+    sp = S.spec._sp;
+  } else {
+  var t0c = performance.now();
+  sp = DSP.spectrum(x, S.fs, S.win);
+  if (S.spec.avg && S.spec.buf && S.spec.buf.length === sp.ampl.length) {
+    for (k = 0; k < sp.ampl.length; k++) {
+      var pw = 0.8 * S.spec.buf[k] + 0.2 * sp.ampl[k] * sp.ampl[k];
+      S.spec.buf[k] = pw; sp.ampl[k] = Math.sqrt(pw); sp.magDb[k] = DSP.db(sp.ampl[k] / Math.SQRT2);
+    }
+  } else if (S.spec.avg) {
+    S.spec.buf = new Float64Array(sp.ampl.length);
+    for (k = 0; k < sp.ampl.length; k++) S.spec.buf[k] = sp.ampl[k] * sp.ampl[k];
+  }
+  S.spec._sp = sp; S.spec._t = nowT; S.spec._cost = performance.now() - t0c;
+  S.spec._src = idx; S.spec._win = S.win; S.spec._fs = S.fs;
+  }
+  S.spec.last = sp;
+
+  /* stop-band shading from filter stages */
+  S.stages.forEach(function (st) {
+    if (st.bypass) return;
+    var bands = [];
+    if (st.type === 'filter') {
+      if (st.resp === 'lp') bands.push([st.fhi, hi]);
+      else if (st.resp === 'hp') bands.push([lo, st.flo]);
+      else if (st.resp === 'bp') { bands.push([lo, st.flo]); bands.push([st.fhi, hi]); }
+    } else if (st.type === 'bwlimit') {
+      if (st.hasHi) bands.push([st.fmax, hi]);
+      if (st.hasLo) bands.push([lo, st.fmin]);
+    }
+    bands.forEach(function (b) {
+      var x0 = clamp(fToX(Math.max(b[0], lo), lo, hi, w), 0, w), x1 = clamp(fToX(Math.min(b[1], hi), lo, hi, w), 0, w);
+      if (x1 <= x0) return;
+      g.fillStyle = 'rgba(228,87,60,.07)'; g.fillRect(x0, 0, x1 - x0, h);
+      g.strokeStyle = 'rgba(228,87,60,.4)'; g.setLineDash([4, 3]); g.beginPath();
+      g.moveTo(x0 + 0.5, 0); g.lineTo(x0 + 0.5, h); g.moveTo(x1 - 0.5, 0); g.lineTo(x1 - 0.5, h); g.stroke(); g.setLineDash([]);
+    });
+  });
+
+  /* chain magnitude response, referenced to the top of the scale */
+  if (S.spec.mask) {
+    g.strokeStyle = 'rgba(203,215,225,.45)'; g.lineWidth = 1; g.setLineDash([5, 3]); g.beginPath();
+    for (var px = 0; px <= w; px += 2) {
+      var f = xToF(px, lo, hi, w); if (f >= S.fs / 2) break;
+      var hh = DSP.db(DSP.cmag(DSP.chainResp(compiled.slice(1, idx + 1), f, S.fs)));
+      var yy2 = yOf(top + hh - 6);
+      px ? g.lineTo(px, yy2) : g.moveTo(px, yy2);
+    }
+    g.stroke(); g.setLineDash([]);
+    lab(g, '|H(f)| of stages 1…' + idx, w - 8, 12, 'rgba(203,215,225,.6)', 'right', 9);
+  }
+
+  /* the spectrum itself */
+  var col = COL.ch[idx % COL.ch.length];
+  var iLo = Math.max(1, Math.floor(lo / sp.df)), iHi = Math.min(sp.n - 1, Math.ceil(hi / sp.df));
+  var med = [], stepB = Math.max(1, (iHi - iLo) >> 6);
+  for (k = iLo; k <= iHi; k += stepB) med.push(sp.magDb[k]);
+  med.sort(function (a, b) { return a - b; });
+  var floorDb = med.length ? med[med.length >> 1] : -300;
+  var nb = iHi - iLo + 1;
+  if (S.spec.stem && nb <= w / 3) {
+    /* discrete-bin view: the FFT's actual output, one stem per bin */
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1.2;
+    for (k = iLo; k <= iHi; k++) {
+      var fx2 = fToX(k * sp.df, lo, hi, w), yv = yOf(sp.magDb[k]);
+      if (yv >= h - 1) continue;
+      g.beginPath(); g.moveTo(fx2, h); g.lineTo(fx2, yv); g.stroke();
+      g.beginPath(); g.arc(fx2, yv, 2, 0, 6.2832); g.fill();
+    }
+    lab(g, nb + ' bins \u00b7 df ' + si(sp.df, 'Hz'), w - 8, h - 22, COL['--ink-dim'], 'right', 9);
+  } else {
+    if (S.spec.stem) lab(g, 'zoom in \u2014 stems need \u2264 ' + Math.floor(w / 3) + ' bins in span', w - 8, h - 22, COL['--ink-dim'], 'right', 9);
+    g.strokeStyle = col; g.lineWidth = 1.3; g.shadowColor = col; g.shadowBlur = 7; g.beginPath();
+    var first = true;
+    for (px = 0; px < w; px++) {
+      /* every pixel covers a frequency interval on the CURRENT axis (log or
+         linear); draw the loudest bin inside it, or the nearest bin when the
+         interval is narrower than one bin */
+      var fA = xToF(px, lo, hi, w), fB = xToF(px + 1, lo, hi, w);
+      var k0 = Math.max(iLo, Math.ceil(fA / sp.df)), k1 = Math.min(iHi, Math.floor(fB / sp.df));
+      var mx;
+      if (k1 < k0) {
+        /* interval narrower than a bin: interpolate in LINEAR amplitude and
+           convert to dB — smooth skirts without the per-bin staircase, and a
+           single-bin spike keeps ~its full height (interpolating in dB would
+           average a -3 dB peak with a -300 dB floor and annihilate it) */
+        var fb2 = clamp((fA + fB) / 2 / sp.df, iLo, iHi - 1e-9);
+        var kf = Math.floor(fb2), tfr = fb2 - kf;
+        var aLin = sp.ampl[kf] * (1 - tfr) + sp.ampl[Math.min(iHi, kf + 1)] * tfr;
+        mx = DSP.db(aLin / Math.SQRT2);
+      } else { mx = -Infinity; for (k = k0; k <= k1; k++) if (sp.magDb[k] > mx) mx = sp.magDb[k]; }
+      first ? (g.moveTo(px, yOf(mx)), first = false) : g.lineTo(px, yOf(mx));
+    }
+    g.stroke(); g.shadowBlur = 0;
+  }
+
+  /* phase trace: right-hand axis, plotted only where the magnitude rises out
+     of the floor (the phase of noise is meaningless), referenced to f0 when a
+     fundamental exists so a periodic signal's harmonic phases hold still */
+  if (S.spec.phase && sp.re) {
+    var f0p = fundamental(), kp = 0, ph0 = 0;
+    if (f0p > 0) { kp = clamp(Math.round(f0p / sp.df), 1, sp.n - 2); ph0 = Math.atan2(sp.im[kp], sp.re[kp]); }
+    var yPh = function (p) { return h * (0.5 - p / Math.PI * 0.42); };
+    /* the phase of a skirt or floor bin is meaningless noise; drawing it as a
+       line produces vertical hash. Mark phase only at spectral peaks — bins
+       that are local maxima and rise out of the floor — as dots. */
+    /* mark only prominent components: above the floor, inside the display,
+       and within 60 dB of the strongest peak — skips edge-quantisation spurs
+       and window sidelobes the way a spectrum-analyser peak table would */
+    var pkDb = -400;
+    for (k = iLo; k <= iHi; k++) if (sp.magDb[k] > pkDb) pkDb = sp.magDb[k];
+    var gate = Math.max(floorDb + 24, S.spec.ref - S.spec.range, pkDb - 60), nDots = 0;
+    g.fillStyle = 'rgba(110,205,225,.9)';
+    for (k = Math.max(iLo, 2); k <= Math.min(iHi, sp.n - 3) && nDots < 500; k++) {
+      if (sp.magDb[k] < gate) continue;
+      if (!(sp.magDb[k] >= sp.magDb[k - 1] && sp.magDb[k] >= sp.magDb[k + 1] &&
+            sp.magDb[k] > sp.magDb[k - 2] && sp.magDb[k] > sp.magDb[k + 2])) continue;
+      var phv = Math.atan2(sp.im[k], sp.re[k]);
+      if (kp) phv -= (k / kp) * ph0;
+      phv = Math.atan2(Math.sin(phv), Math.cos(phv));
+      var pxx = fToX(k * sp.df, lo, hi, w);
+      if (pxx < 0 || pxx > w) continue;
+      g.beginPath(); g.arc(pxx, yPh(phv), 2.2, 0, 6.2832); g.fill();
+      nDots++;
+    }
+    [[Math.PI, '+180\u00b0'], [0, '0\u00b0'], [-Math.PI, '\u2212180\u00b0']].forEach(function (tk) {
+      lab(g, tk[1], w - 4, yPh(tk[0]) + (tk[0] > 0 ? 8 : tk[0] < 0 ? -8 : 0), 'rgba(110,205,225,.7)', 'right', 9);
+    });
+    lab(g, kp ? 'phase (rel f\u2080)' : 'phase', w - 4, h * 0.5 - 24, 'rgba(110,205,225,.7)', 'right', 9);
+  }
+
+  /* hover readout: exact bin under the cursor */
+  if (S.spec.hoverPx != null && S.spec.hoverPx >= 0 && S.spec.hoverPx <= w) {
+    var hx = S.spec.hoverPx, hf = xToF(hx, lo, hi, w);
+    var hk = clamp(Math.round(hf / sp.df), 1, sp.n - 1);
+    g.strokeStyle = 'rgba(203,215,225,.25)'; g.beginPath();
+    g.moveTo(hx + 0.5, 0); g.lineTo(hx + 0.5, h); g.stroke();
+    var hy = yOf(sp.magDb[hk]);
+    if (hy > 0 && hy < h) { g.fillStyle = COL['--ink']; g.beginPath(); g.arc(hx, hy, 2.5, 0, 6.2832); g.fill(); }
+    var htxt = '\u25b8 ' + si(hk * sp.df, 'Hz') + ' \u00b7 ' + sp.magDb[hk].toFixed(1) + ' dBV \u00b7 ' + si(sp.ampl[hk], 'Vpk');
+    if (S.spec.phase && sp.re) htxt += ' \u00b7 ' + (Math.atan2(sp.im[hk], sp.re[hk]) * 180 / Math.PI).toFixed(0) + '\u00b0';
+    var tx = clamp(hx + 10, 4, w - 240);
+    g.fillStyle = 'rgba(10,14,18,.85)'; g.fillRect(tx - 4, 22, 236, 16);
+    lab(g, htxt, tx, 30, COL['--ink'], 'left', 10);
+  }
+
+  /* harmonic markers */
+  var f0 = fundamental();
+  if (S.spec.harm && f0 > 0) {
+    var shown = 0;
+    for (k = 1; k <= 64 && k * f0 < Math.min(hi, S.fs / 2); k++) {
+      if (S.stages[0].wave === 'square' && k % 2 === 0) continue;
+      var fk = k * f0; if (fk < lo) continue;
+      var amp = DSP.toneAmplitude(sp, fk), aDb = DSP.db(amp / Math.SQRT2);
+      var xk = fToX(fk, lo, hi, w), yk = yOf(aDb);
+      /* mark it only if it rises out of the floor AND is inside the display */
+      if (k > 1 && (aDb < floorDb + 12 || aDb < bot + 2)) continue;
+      g.strokeStyle = k === 1 ? COL['--amber'] : 'rgba(242,169,59,.35)';
+      g.beginPath(); g.moveTo(xk, yk - 4); g.lineTo(xk, yk - 12); g.stroke();
+      g.fillStyle = k === 1 ? COL['--amber'] : 'rgba(242,169,59,.5)';
+      g.beginPath(); g.arc(xk, yk, k === 1 ? 3 : 2, 0, 6.2832); g.fill();
+      if (shown < 14) lab(g, k === 1 ? 'f₀' : 'h' + k, xk, yk - 19, k === 1 ? COL['--amber'] : 'rgba(242,169,59,.6)', 'center', 9);
+      shown++;
+    }
+    var th = DSP.thd(sp, f0, 20);
+    if (th.thd !== null) {
+      lab(g, 'f₀ ' + si(f0, 'Hz') + '   ' + DSP.db(th.fund / Math.SQRT2).toFixed(1) + ' dBV   THD ' + (th.thd * 100).toFixed(2) + ' %',
+        8, 12, COL['--amber'], 'left', 10);
+    }
+  }
+  /* peak marker */
+  var pf = DSP.peakFreq(sp, sp.df * 2);
+  lab(g, 'peak ' + si(pf, 'Hz') + '  ' + DSP.toneAmplitude(sp, pf).toFixed(4) + ' Vpk', 8, h - 24, COL['--ink-dim'], 'left', 10);
+  lab(g, 'RBW ' + si(sp.df * sp.enbw, 'Hz') + ' · ' + S.win, w - 8, h - 24, COL['--ink-faint'], 'right', 9);
+}
+
+/* ================= transfer function ================= */
+function drawTF() {
+  var cv = $('tfCv'), d = fitCanvas(cv), g = d.g, w = d.w, h = d.h;
+  g.clearRect(0, 0, w, h);
+  var lo = Math.max(1, S.fs / 1e6), hi = S.fs / 2, N = Math.max(200, Math.floor(w));
+  var act = [], i, k;
+  for (i = 1; i < compiled.length; i++) if (!compiled[i].bypass) act.push(i);
+  var mag = new Float64Array(N), ph = new Float64Array(N), fr = new Float64Array(N);
+  var mn = 1e9, mx = -1e9;
+  for (i = 0; i < N; i++) {
+    var f = lo * Math.pow(hi / lo, i / (N - 1)); fr[i] = f;
+    var c = DSP.chainResp(compiled.slice(1), f, S.fs);
+    mag[i] = DSP.db(DSP.cmag(c)); ph[i] = DSP.cphase(c) * 180 / Math.PI;
+    if (mag[i] > mx) mx = mag[i];
+    if (mag[i] < mn && mag[i] > -400) mn = mag[i];
+  }
+  var top = Math.ceil((mx + 6) / 10) * 10, range = clamp(Math.ceil((top - mn) / 10) * 10, 60, 160), bot = top - range;
+  var yM = function (db) { return h - (clamp(db, bot, top) - bot) / range * h; };
+  var yP = function (p) { return h / 2 - p / 180 * (h / 2 - 4); };
+  var xF = function (f) { return log10(f / lo) / log10(hi / lo) * w; };
+  gridStyle(g); g.beginPath();
+  for (var dbv = Math.ceil(bot / 20) * 20; dbv <= top; dbv += 20) { var yy = Math.round(yM(dbv)) + 0.5; g.moveTo(0, yy); g.lineTo(w, yy); }
+  for (var dec = Math.floor(log10(lo)); dec <= Math.ceil(log10(hi)); dec++)
+    for (k = 1; k < 10; k++) { var f2 = k * Math.pow(10, dec); if (f2 < lo || f2 > hi) continue; var xx = Math.round(xF(f2)) + 0.5; g.moveTo(xx, 0); g.lineTo(xx, h); }
+  g.stroke();
+  for (dbv = Math.ceil(bot / 20) * 20; dbv <= top; dbv += 20) lab(g, dbv + ' dB', 4, yM(dbv) - 6, COL['--ink-faint'], 'left', 9);
+  for (dec = Math.floor(log10(lo)); dec <= Math.ceil(log10(hi)); dec++) {
+    var fd = Math.pow(10, dec); if (fd < lo || fd > hi) continue;
+    lab(g, si(fd, 'Hz', 0), xF(fd) + 3, h - 9, COL['--ink-faint'], 'left', 9);
+  }
+  /* phase */
+  if (S.tf.phase) {
+    g.strokeStyle = 'rgba(79,201,228,.5)'; g.lineWidth = 1; g.setLineDash([4, 3]); g.beginPath();
+    var prev = null;
+    for (i = 0; i < N; i++) {
+      var y = yP(ph[i]);
+      if (prev !== null && Math.abs(ph[i] - prev) > 180) g.moveTo(xF(fr[i]), y); else i ? g.lineTo(xF(fr[i]), y) : g.moveTo(xF(fr[i]), y);
+      prev = ph[i];
+    }
+    g.stroke(); g.setLineDash([]);
+    lab(g, '+180°', w - 6, yP(180) + 8, 'rgba(79,201,228,.6)', 'right', 9);
+    lab(g, '−180°', w - 6, yP(-180) - 8, 'rgba(79,201,228,.6)', 'right', 9);
+  }
+  /* per-stage */
+  if (S.tf.stages && act.length > 1) {
+    act.forEach(function (si2) {
+      g.strokeStyle = COL.ch[si2 % COL.ch.length]; g.globalAlpha = 0.42; g.lineWidth = 1; g.beginPath();
+      for (i = 0; i < N; i++) {
+        var v = DSP.db(DSP.cmag(DSP.stageResp(compiled[si2], fr[i], S.fs)));
+        i ? g.lineTo(xF(fr[i]), yM(v)) : g.moveTo(xF(fr[i]), yM(v));
+      }
+      g.stroke(); g.globalAlpha = 1;
+    });
+  }
+  /* total */
+  g.strokeStyle = COL['--amber']; g.lineWidth = 1.8; g.beginPath();
+  for (i = 0; i < N; i++) { var yy2 = yM(mag[i]); i ? g.lineTo(xF(fr[i]), yy2) : g.moveTo(xF(fr[i]), yy2); }
+  g.stroke();
+  /* -3 dB markers */
+  if (S.tf.markers) {
+    var thr = mx - 3.0103, cross = [];
+    for (i = 1; i < N; i++) if ((mag[i - 1] - thr) * (mag[i] - thr) < 0) {
+      var t = (thr - mag[i - 1]) / (mag[i] - mag[i - 1]);
+      cross.push(fr[i - 1] * Math.pow(fr[i] / fr[i - 1], t));
+    }
+    cross.slice(0, 4).forEach(function (f) {
+      g.strokeStyle = 'rgba(126,211,150,.8)'; g.setLineDash([2, 3]); g.beginPath();
+      g.moveTo(xF(f), 0); g.lineTo(xF(f), h); g.stroke(); g.setLineDash([]);
+      lab(g, '−3 dB ' + si(f, 'Hz'), xF(f) + 4, 26, COL['--ok'], 'left', 9);
+    });
+    if (cross.length >= 2) lab(g, 'BW ' + si(cross[cross.length - 1] - cross[0], 'Hz'), 8, 40, COL['--ok'], 'left', 10);
+    lab(g, 'peak ' + mx.toFixed(2) + ' dB', 8, 12, COL['--amber'], 'left', 10);
+  }
+  /* harmonic ticks */
+  var f0 = fundamental();
+  if (S.tf.harm && f0 > 0) {
+    for (k = 1; k <= 40 && k * f0 < hi; k++) {
+      if (S.stages[0].wave === 'square' && k % 2 === 0) continue;
+      var xk = xF(k * f0);
+      g.strokeStyle = k === 1 ? 'rgba(242,169,59,.8)' : 'rgba(242,169,59,.28)';
+      g.beginPath(); g.moveTo(xk, h - 18); g.lineTo(xk, h - 26); g.stroke();
+    }
+    lab(g, 'harmonics of ' + si(f0, 'Hz'), 8, h - 32, 'rgba(242,169,59,.55)', 'left', 9);
+  }
+  /* hover readout */
+  if (S.tf.hoverF) {
+    var f = clamp(S.tf.hoverF, lo, hi), c2 = DSP.chainResp(compiled.slice(1), f, S.fs);
+    var m2 = DSP.db(DSP.cmag(c2)), p2 = DSP.cphase(c2) * 180 / Math.PI;
+    g.strokeStyle = 'rgba(203,215,225,.5)'; g.beginPath(); g.moveTo(xF(f), 0); g.lineTo(xF(f), h); g.stroke();
+    $('tfReadout').textContent = si(f, 'Hz') + '   |H| ' + m2.toFixed(2) + ' dB   ∠ ' + p2.toFixed(1) + '°   ×' + DSP.undb(m2).toPrecision(3);
+  }
+}
+
+/* ================= measurements strip ================= */
+function drawMeas() {
+  var host = $('meas'), sc = S.scope;
+  var W = sc._W || 1024, start = sc._start || 0;
+  var html = '';
+  S.stages.forEach(function (st, i) {
+    if (!st.probe) return;
+    var n = Math.min(W, 1 << 15), buf = new Float64Array(n), i0 = start + Math.max(0, W - n);
+    for (var k = 0; k < n; k++) buf[k] = at(probes[i], i0 + k);
+    var m = DSP.measure(buf, S.fs), tb = DSP.topBase(buf);
+    var rt = DSP.riseTime(buf, S.fs), os = DSP.overshoot(buf);
+    /* a 10-90 % rise or an overshoot only means something for a signal that
+       actually dwells on two levels; a sine or noise spends its life between
+       them, so those cells read em-dash instead of a misleading number */
+    var stepLike = false;
+    if (tb.top - tb.base > 1e-12) {
+      var band = 0.15 * (tb.top - tb.base), nr = 0;
+      for (var q2 = 0; q2 < n; q2++) { var vv = buf[q2]; if (Math.abs(vv - tb.top) < band || Math.abs(vv - tb.base) < band) nr++; }
+      stepLike = nr / n > 0.5;
+    }
+    var col = COL.ch[i % COL.ch.length];
+    html += '<div class="mcard"><div class="mh"><span class="led on" style="color:' + col + '"></span>' +
+      '<b>' + i + ' · ' + SCHEMA[st.type].name + '</b></div><div class="mgrid">' +
+      '<i>Vpp</i><u>' + si(m.pp, 'V') + '</u><i></i>' +
+      '<i>Vrms</i><u>' + si(m.rms, 'V') + '</u><i></i>' +
+      '<i>mean</i><u>' + si(m.mean, 'V') + '</u><i></i>' +
+      '<i>freq</i><u>' + (m.freq ? si(m.freq, 'Hz') : '—') + '</u><i></i>' +
+      '<i>t<sub>r</sub></i><u>' + (stepLike && rt ? si(rt, 's') : '—') + '</u><i></i>' +
+      '<i>over</i><u>' + (stepLike ? (os ? os.toFixed(1) + ' %' : '0 %') : '—') + '</u><i></i>' +
+      '<i>top</i><u>' + si(tb.top, 'V') + '</u><i></i>' +
+      '<i>base</i><u>' + si(tb.base, 'V') + '</u><i></i>' +
+      '</div></div>';
+  });
+  host.innerHTML = html || '<div class="mcard"><div class="mh"><b>No probes enabled</b></div>' +
+    '<div class="mgrid"><i>Click a stage LED in the chain to probe that node.</i></div></div>';
+}
+
+/* ================= in-app self test ================= */
+function runSelfTest() {
+  var R = [], t0 = performance.now();
+  function ck(name, got, want, tol, unit) {
+    R.push({ name: name, ok: Math.abs(got - want) <= tol, txt: fmtNum(got) + ' vs ' + fmtNum(want) + ' ±' + fmtNum(tol) + ' ' + (unit || '') });
+  }
+  function ckT(name, cond, txt) { R.push({ name: name, ok: !!cond, txt: txt }); }
+  function fmtNum(v) { return (Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0)) ? v.toExponential(3) : String(+v.toFixed(4)); }
+  var fs = 1e6, N = 4096, i, x = new Float64Array(N), fb = Math.round(10e3 / (fs / N)) * (fs / N);
+  for (i = 0; i < N; i++) x[i] = Math.sin(2 * Math.PI * fb * i / fs);
+  var sp = DSP.spectrum(x, fs, S.win);
+  ck('1 Vpk sine reads 1 V in the spectrum', DSP.toneAmplitude(sp, fb), 1, 0.005, 'V');
+  ck('…and −3.01 dBV', DSP.db(DSP.toneAmplitude(sp, fb) / Math.SQRT2), -3.0103, 0.05, 'dB');
+  ck('peak-frequency estimator', DSP.peakFreq(sp, 200), fb, sp.df * 0.05, 'Hz');
+  [1, 2, 3, 4, 6, 8].forEach(function (o) {
+    var s2 = DSP.butter('lp', fs, 20e3, o);
+    ck('Butterworth order ' + o + ': −3 dB at f_c', DSP.db(DSP.cmag(DSP.cascadeResp(s2, 2 * Math.PI * 20e3 / fs))), -3.0103, 0.02, 'dB');
+  });
+  var rc = DSP.passive('rc_lp', 1000, 1e-6, 1e-9, 10e6);
+  ck('RC network corner = 1/2πRC', rc.info.fc, 1 / (2 * Math.PI * 1000 * 1e-9), 1e-6, 'Hz');
+  ck('RC network phase at f_c', DSP.cphase(DSP.cascadeResp(rc.sections, 2 * Math.PI * rc.info.fc / 10e6)) * 180 / Math.PI, -45, 0.3, '°');
+  var bp = DSP.passive('rlc_bp', 50, 100e-6, 1e-9, 100e6);
+  ck('Series RLC Q = √(L/C)/R', bp.info.Q, Math.sqrt(100e-6 / 1e-9) / 50, 1e-9, '');
+  ck('Series RLC gain at f₀', DSP.db(DSP.cmag(DSP.cascadeResp(bp.sections, 2 * Math.PI * bp.info.fc / 100e6))), 0, 0.05, 'dB');
+  var gs = DSP.compileStage({ type: 'gain', db: 20, rsrc: 50, rload: 50, clip: false }, fs);
+  ck('50 Ω into 50 Ω costs 6.02 dB', gs.meta.dividerDb, -6.0206, 1e-6, 'dB');
+  ck('net gain of a 20 dB stage into a matched load', gs.meta.totalDb, 13.9794, 1e-6, 'dB');
+  var fsq = 10e6, cfg = { wave: 'square', amp: 1, freq: 10e3, duty: 50, offset: 0, rise: 1e-11, ringAmp: 0, ringFreq: 0, ringDecay: 1e-6, unipolar: false };
+  var sqs = DSP.makeSource(cfg, fsq), sb = new Float64Array(1 << 15);
+  DSP.sourceRender(sqs, sb, sb.length);
+  var ssp = DSP.spectrum(sb, fsq, 'hann');
+  [1, 3, 5].forEach(function (k) { ck('square harmonic ' + k + ' = 4A/πk', DSP.toneAmplitude(ssp, k * 10e3), 4 / (Math.PI * k), 4 / (Math.PI * k) * 0.01, 'V'); });
+  ckT('square has no even harmonics', DSP.db(DSP.toneAmplitude(ssp, 2e4)) < -50, DSP.db(DSP.toneAmplitude(ssp, 2e4)).toFixed(1) + ' dBV');
+  var trs = 200e-9, fs3 = 100e6;
+  var rc2 = { wave: 'square', amp: 1, freq: 100e3, duty: 50, offset: 0, rise: trs, ringAmp: 0, ringFreq: 0, ringDecay: 1e-6, unipolar: false };
+  var s3 = DSP.makeSource(rc2, fs3), b3 = new Float64Array(1 << 14);
+  DSP.sourceRender(s3, b3, b3.length);
+  ck('rise-time setting is reproduced', DSP.riseTime(b3, fs3) * 1e9, trs * 1e9, trs * 1e9 * 0.01, 'ns');
+  ck('a shaped edge alone has no overshoot', DSP.overshoot(b3), 0, 0.5, '%');
+  rc2.ringAmp = 20; rc2.ringFreq = 20e6; rc2.ringDecay = 300e-9;
+  var s4 = DSP.makeSource(rc2, fs3), b4 = new Float64Array(1 << 14);
+  DSP.sourceRender(s4, b4, b4.length);
+  ck('ringing amplitude setting → measured overshoot', DSP.overshoot(b4), 20, 5, '%');
+  /* the identity behind the Harmonics pane: pass a square through a known
+     filter and check, harmonic by harmonic, that the output coefficient is
+     the input coefficient times |H(k f0)| */
+  var hf = 10e6, hf0 = 10e3, hP = hf / hf0, hN = Math.round(8 * hP), settle = Math.round(2 * hP);
+  var hcfg = { wave: 'square', amp: 1, freq: hf0, duty: 50, offset: 0, rise: 1e-9, ringAmp: 0, ringFreq: 0, ringDecay: 1e-6, unipolar: false };
+  var hsrc = DSP.makeSource(hcfg, hf), hbuf = new Float64Array(settle + hN);
+  DSP.sourceRender(hsrc, hbuf, hbuf.length);
+  var hsec = DSP.butter('lp', hf, 35e3, 4), hout = new Float64Array(settle + hN);
+  hsec.forEach(DSP.bqReset);
+  for (i = 0; i < hbuf.length; i++) {
+    var hv = hbuf[i];
+    for (var hq = 0; hq < hsec.length; hq++) hv = DSP.bqStep(hsec[hq], hv);
+    hout[i] = hv;
+  }
+  [1, 3, 5, 7].forEach(function (k) {
+    var ain = DSP.dtft(hbuf.subarray(settle), k * hf0, hf), aout = DSP.dtft(hout.subarray(settle), k * hf0, hf);
+    var vin = 2 * Math.hypot(ain.re, ain.im) / hN, vout = 2 * Math.hypot(aout.re, aout.im) / hN;
+    var Hm = DSP.cmag(DSP.cascadeResp(hsec, DSP.TAU * k * hf0 / hf));
+    ck('harmonic bookkeeping k=' + k + ': out = in × |H|', vout, vin * Hm, Math.max(vin * Hm * 0.005, 1e-5), 'V');
+  });
+  /* the live chain: measured response must equal the plotted response */
+  var cc = compiled.slice(1).filter(function (c) { return !c.bypass && c.linear; });
+  var Nh = 1 << 13, hh, tail = 0, worst = 0, wf = 0;
+  /* A truncated impulse response only equals the exact DTFT once it has
+     decayed. A high-Q section can ring for tens of thousands of samples, so
+     grow the capture until the discarded tail is negligible, then use what is
+     left of that tail as the tolerance — the test is only ever as tight as the
+     measurement it is based on. */
+  for (;;) {
+    hh = new Float64Array(Nh);
+    cc.forEach(function (c) { c.sections.forEach(DSP.bqReset); });
+    for (i = 0; i < Nh; i++) {
+      var v = (i === 0 ? 1 : 0);
+      for (var j = 0; j < cc.length; j++) { v *= cc[j].gain; for (var q = 0; q < cc[j].sections.length; q++) v = DSP.bqStep(cc[j].sections[q], v); }
+      hh[i] = v;
+    }
+    var tot = 0; tail = 0;
+    for (i = 0; i < Nh; i++) { var a = Math.abs(hh[i]); tot += a; if (i >= Nh * 0.9) tail += a; }
+    if (tail <= 1e-9 * Math.max(tot, 1e-30) || Nh >= (1 << 18)) break;
+    Nh *= 2;
+  }
+  /* Compare in dB only where the chain actually passes something. Inside a
+     transmission zero (a notch centre, a trap, DC on a high-pass) both numbers
+     are ~0 and their ratio in dB is meaningless, so there we compare linear
+     magnitudes against an absolute floor instead. */
+  var tolLin = Math.max(1e-9, 10 * tail), FLOOR = Math.max(1e-4, 100 * tolLin);
+  var nDb = 0, worstLin = 0, wfLin = 0;
+  [S.fs / 1000, S.fs / 100, S.fs / 20, S.fs / 8, S.fs / 4].forEach(function (f) {
+    var hm = DSP.cmag(DSP.dtft(hh, f, S.fs)), ha = DSP.cmag(DSP.chainResp(cc, f, S.fs));
+    if (ha > FLOOR) {
+      nDb++;
+      var e = Math.abs(DSP.db(hm) - DSP.db(ha));
+      if (e > worst) { worst = e; wf = f; }
+    } else {
+      var el = Math.abs(hm - ha);
+      if (el > worstLin) { worstLin = el; wfLin = f; }
+    }
+  });
+  var tolDb = Math.max(0.01, 8.686 * tolLin / FLOOR);
+  if (nDb) ck('live chain: impulse response = plotted |H(f)|', worst, 0, tolDb, 'dB at ' + si(wf, 'Hz') + ' (' + Nh + '-tap capture)');
+  else R.push({ name: 'live chain: impulse response = plotted |H(f)|', ok: true, txt: 'chain blocks every probe frequency — compared linearly only' });
+  if (nDb < 5) ck('…and inside transmission zeros (linear |H|)', worstLin, 0, tolLin, 'at ' + si(wfLin, 'Hz'));
+  cc.forEach(function (c) { c.sections.forEach(DSP.bqReset); });
+  resetBuffers();
+
+  var pass = R.filter(function (r) { return r.ok; }).length;
+  var html = '<table><tr><th>Status</th><th>Check</th><th>Measured</th></tr>';
+  R.forEach(function (r) {
+    html += '<tr><td class="st ' + (r.ok ? 'pass' : 'fail') + '">' + (r.ok ? 'PASS' : 'FAIL') + '</td><td>' + r.name + '</td><td>' + r.txt + '</td></tr>';
+  });
+  $('testOut').innerHTML = html + '</table>';
+  $('testBadge').innerHTML = '<span class="badge ' + (pass === R.length ? 'pass' : 'fail') + '">' + pass + ' / ' + R.length + ' passed</span>';
+  $('testMeta').textContent = 'ran in ' + (performance.now() - t0).toFixed(0) + ' ms · window ' + S.win + ' · f_s ' + si(S.fs, 'Sa/s');
+}
+
+/* ================= presets ================= */
+var PRESETS = [
+  { name: 'Square edge into an RC load', fs: 10e6, tdiv: 2e-6, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'square', amp: 1, freq: 100e3, offset: 0, duty: 50, rise: 100e-9, ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 1e6, prbsOrder: 7, carrier: 2e6, unipolar: false, f2: 150e3, amp2: 0.5 },
+    { type: 'gain', db: 0, rsrc: 50, rload: 1e6, clip: false, vmax: 1, soft: false },
+    { type: 'passive', topo: 'rc_lp', R: 1000, L: 100e-6, C: 100e-12 } ] },
+  { name: 'Ringing edge cleaned by an LC trap', fs: 100e6, tdiv: 200e-9, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'square', amp: 1, freq: 1e6, offset: 0, duty: 50, rise: 40e-9, ringAmp: 35, ringFreq: 20e6, ringDecay: 150e-9, bitrate: 1e6, prbsOrder: 7, carrier: 2e6, unipolar: false, f2: 150e3, amp2: 0.5 },
+    { type: 'passive', topo: 'notch', R: 20, L: 10e-6, C: 6.3e-12 } ] },
+  { name: 'Bandwidth-limited PRBS', fs: 100e6, tdiv: 500e-9, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'prbs', amp: 1, freq: 1e6, offset: 0, duty: 50, rise: 5e-9, ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 10e6, prbsOrder: 9, carrier: 2e6, unipolar: false, f2: 150e3, amp2: 0.5 },
+    { type: 'filter', resp: 'lp', flo: 10e3, fhi: 7e6, order: 4, q: 5 },
+    { type: 'noise', rms: 0.02, pink: false } ] },
+  { name: 'OOK link: band-pass and noise', fs: 100e6, tdiv: 2e-6, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'ook', amp: 1, freq: 1e6, offset: 0, duty: 50, rise: 50e-9, ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 2e6, prbsOrder: 7, carrier: 10e6, unipolar: true, f2: 150e3, amp2: 0.5 },
+    { type: 'noise', rms: 0.05, pink: false },
+    { type: 'filter', resp: 'bp', flo: 6e6, fhi: 14e6, order: 3, q: 5 },
+    { type: 'gain', db: 6, rsrc: 50, rload: 50, clip: false, vmax: 1, soft: false } ] },
+  { name: 'Two tones into a saturating amp', fs: 10e6, tdiv: 20e-6, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'twotone', amp: 0.5, freq: 100e3, offset: 0, duty: 50, rise: 100e-9, ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 1e6, prbsOrder: 7, carrier: 2e6, unipolar: false, f2: 110e3, amp2: 0.5 },
+    { type: 'gain', db: 12, rsrc: 50, rload: 1e6, clip: true, vmax: 1.2, soft: true } ] },
+  { name: 'Resonant peaking: series RLC', fs: 10e6, tdiv: 5e-6, vdiv: 0.5, stages: [
+    { type: 'source', wave: 'square', amp: 1, freq: 20e3, offset: 0, duty: 50, rise: 200e-9, ringAmp: 0, ringFreq: 5e6, ringDecay: 200e-9, bitrate: 1e6, prbsOrder: 7, carrier: 2e6, unipolar: false, f2: 150e3, amp2: 0.5 },
+    { type: 'passive', topo: 'rlc_lp', R: 30, L: 470e-6, C: 470e-12 } ] }
+];
+function loadPreset(p) {
+  S.fs = p.fs; $('fsSel').value = String(p.fs);
+  S.stages = p.stages.map(function (s) {
+    var st = Object.assign({}, JSON.parse(JSON.stringify(DEFAULTS[s.type] || {})), JSON.parse(JSON.stringify(s)));
+    st.id = Math.random().toString(36).slice(2, 8); st.open = false; st.probe = true; st.bypass = false;
+    return st;
+  });
+  S.stages[0].open = true;
+  S.scope.tdiv = p.tdiv; S.scope.vdiv = p.vdiv; S.scope.hpos = 0; S.scope.src = 0; S.spec.src = null;
+  syncScopeSliders();
+  resetBuffers(); renderChain();
+}
+
+
+/* ================= harmonic decomposition =================
+   Extract the complex Fourier coefficients a_k of the live source over an
+   integer number of periods (exact for a periodic signal — no window, no
+   scalloping), pass each through the chain's complex H(k f0), and overlay the
+   resulting sum on the measured output. For a linear chain the two must be
+   the same curve: the filtered signal IS its harmonics, each scaled and
+   phase-shifted by the transfer function.                                   */
+function harmFund() {
+  var s = S.stages[0], f0 = fundamental();
+  if (s && s.wave === 'twotone' && f0 > 0 && s.amp2 > 0) {
+    /* decompose on the beat fundamental so both tones land on the k-grid */
+    var a = Math.round(f0), b = Math.round(s.f2), t;
+    while (b) { t = a % b; a = b; b = t; }
+    if (a >= f0 / 64) f0 = a;
+  }
+  return f0;
+}
+function harmCoeffs() {
+  var f0 = harmFund();
+  if (!(f0 > 0)) return null;
+  var P = S.fs / f0;
+  if (P < 4 || f0 >= S.fs / 2) return null;
+  var M = Math.max(2, Math.round(8192 / P));
+  var Nw = Math.round(M * P);
+  if (total < Nw + 2 || Nw > BUF - 4) return null;
+  var src = grabWindow(0, Nw);
+  var outIdx = lastProbed();
+  var out = outIdx > 0 ? grabWindow(outIdx, Nw) : null;
+  var cc = compiled.slice(1).filter(function (c) { return !c.bypass && c.linear; });
+  var nonlin = compiled.slice(1).some(function (c) { return !c.bypass && !c.linear; });
+  var kMax = Math.min(S.harm.n, Math.floor((S.fs / 2 - 1) / f0), 199);
+  var rows = [], dc = 0, i;
+  for (i = 0; i < Nw; i++) dc += src[i];
+  dc /= Nw;
+  var H0 = DSP.chainResp(cc, 0, S.fs);
+  for (var k = 1; k <= kMax; k++) {
+    var c = DSP.dtft(src, k * f0, S.fs);
+    var amp = 2 * Math.hypot(c.re, c.im) / Nw, ph = Math.atan2(c.im, c.re);
+    var H = DSP.chainResp(cc, k * f0, S.fs);
+    var Hm = DSP.cmag(H), Hp = DSP.cphase(H);
+    var mAmp = null;
+    if (out) { var mo = DSP.dtft(out, k * f0, S.fs); mAmp = 2 * Math.hypot(mo.re, mo.im) / Nw; }
+    rows.push({ k: k, f: k * f0, a: amp, ph: ph, Hm: Hm, Hp: Hp, out: amp * Hm, meas: mAmp });
+  }
+  return { f0: f0, P: P, Nw: Nw, dc: dc, H0: H0, rows: rows, out: out, src: src, nonlin: nonlin, outIdx: outIdx };
+}
+function drawHarmonics() {
+  var cv = $('harmCv'), d = fitCanvas(cv), g = d.g, w = d.w, h = d.h;
+  g.clearRect(0, 0, w, h);
+  gridStyle(g); g.beginPath();
+  for (var i = 0; i <= 10; i++) { var x = Math.round(i * w / 10) + 0.5; g.moveTo(x, 0); g.lineTo(x, h); }
+  for (i = 0; i <= 8; i++) { var y = Math.round(i * h / 8) + 0.5; g.moveTo(0, y); g.lineTo(w, y); }
+  g.stroke();
+  var HC = harmCoeffs();
+  if (!HC) {
+    var f0w = harmFund();
+    var msg = !(f0w > 0) ? 'harmonic view needs a periodic source (sine, square, triangle, saw, two-tone)'
+      : (f0w >= S.fs / 2 || S.fs / f0w < 4) ? 'f\u2080 too close to Nyquist \u2014 raise the sample rate'
+      : (Math.round(Math.max(2, Math.round(8192 / (S.fs / f0w))) * S.fs / f0w) > BUF - 4) ? 'period too long for the capture buffer \u2014 raise f\u2080 or the sample rate'
+      : 'collecting samples\u2026';
+    lab(g, msg, w / 2, h / 2, COL['--ink-faint'], 'center');
+    $('harmTable').innerHTML = '';
+    return;
+  }
+  var span = 2 * HC.P;                        /* draw two periods */
+  var NPX = Math.min(Math.ceil(w * 2), 2400);
+  /* the measured output window ends at "now"; align the drawn span to its tail
+     so the analytic sum and the measured trace cover the same samples */
+  var tail = HC.Nw - span;
+  function synth(px, useH) {
+    var n = tail + px / NPX * span;           /* sample index inside the window */
+    var v = useH ? HC.dc * DSP.cmag(HC.H0) * Math.cos(DSP.cphase(HC.H0)) : HC.dc;
+    for (var r = 0; r < HC.rows.length; r++) {
+      var q = HC.rows[r], wk = DSP.TAU * q.f / S.fs;
+      v += (useH ? q.a * q.Hm : q.a) * Math.cos(wk * n + q.ph + (useH ? q.Hp : 0));
+    }
+    return v;
+  }
+  /* vertical scale from everything drawn */
+  var vmax = 1e-12;
+  for (var px = 0; px <= NPX; px += 8) {
+    vmax = Math.max(vmax, Math.abs(synth(px, false)), Math.abs(synth(px, true)));
+    if (HC.out) vmax = Math.max(vmax, Math.abs(HC.out[Math.min(HC.Nw - 1, Math.round(tail + px / NPX * span))]));
+  }
+  vmax *= 1.15;
+  var Y = function (v) { return h / 2 - v / vmax * (h / 2 - 8); };
+  function trace(fn, col, width, dash) {
+    g.strokeStyle = col; g.lineWidth = width; if (dash) g.setLineDash(dash);
+    g.beginPath();
+    for (var p2 = 0; p2 <= NPX; p2++) {
+      var yy = clamp(Y(fn(p2)), -20, h + 20);
+      p2 ? g.lineTo(p2 / NPX * w, yy) : g.moveTo(0, yy);
+    }
+    g.stroke(); g.setLineDash([]);
+  }
+  /* individual input harmonics, faint */
+  if (S.harm.parts) {
+    var shown = 0;
+    for (var r2 = 0; r2 < HC.rows.length && shown < 8; r2++) {
+      (function (q) {
+        if (q.a < vmax * 0.004) return;
+        shown++;
+        g.globalAlpha = 0.30;
+        trace(function (p3) {
+          var n2 = tail + p3 / NPX * span;
+          return q.a * Math.cos(DSP.TAU * q.f / S.fs * n2 + q.ph);
+        }, COL['--ink-faint'], 1);
+        g.globalAlpha = 1;
+      })(HC.rows[r2]);
+    }
+  }
+  if (S.harm.sum) trace(function (p4) { return synth(p4, false); }, COL.ch[0], 1.4);
+  if (HC.out && S.harm.meas) trace(function (p5) { return HC.out[Math.min(HC.Nw - 1, Math.round(tail + p5 / NPX * span))]; }, COL.ch[1], 1.6);
+  if (S.harm.pred) trace(function (p6) { return synth(p6, true); }, COL.ch[2], 1.3, [6, 4]);
+  /* legend + agreement figure */
+  var lx = 10;
+  if (S.harm.sum) { lab(g, '— Σ input harmonics (' + HC.rows.length + ')', lx, 16, COL.ch[0]); lx += 150; }
+  if (HC.out && S.harm.meas) { lab(g, '— measured output', lx, 16, COL.ch[1]); lx += 120; }
+  if (S.harm.pred) { lab(g, '· · predicted Σ aₖ·H(kf₀)', lx, 16, COL.ch[2]); lx += 150; }
+  if (HC.out && HC.rows.length && !HC.nonlin) {
+    var err = 0, np = 0;
+    for (var r3 = 0; r3 < HC.rows.length; r3++) {
+      var q2 = HC.rows[r3];
+      if (q2.out > vmax * 0.01 && q2.meas !== null) { err += Math.abs(q2.meas - q2.out) / q2.out; np++; }
+    }
+    if (np) lab(g, 'harmonic agreement ' + (100 - 100 * err / np).toFixed(1) + ' %', w - 10, 16, COL['--ink-dim'], 'right');
+  }
+  if (HC.nonlin) lab(g, 'chain contains a nonlinear stage — prediction covers the linear part only', w - 10, 16, COL['--warn'], 'right');
+  lab(g, 'f₀ = ' + si(HC.f0, 'Hz') + ' · 2 periods · ' + HC.Nw + ' samples analysed', 10, h - 8, COL['--ink-faint']);
+  /* table */
+  var tb = '<table><tr><th>k</th><th>f</th><th>input aₖ</th><th>|H(kf₀)|</th><th>predicted out</th><th>measured out</th></tr>';
+  var lim = Math.min(HC.rows.length, 12);
+  for (var r4 = 0; r4 < lim; r4++) {
+    var q3 = HC.rows[r4];
+    tb += '<tr><td>' + q3.k + '</td><td>' + si(q3.f, 'Hz') + '</td><td>' + si(q3.a, 'V') + '</td><td>' +
+      DSP.db(q3.Hm).toFixed(1) + ' dB</td><td>' + si(q3.out, 'V') + '</td><td>' +
+      (q3.meas === null ? '—' : si(q3.meas, 'V')) + '</td></tr>';
+  }
+  if (HC.rows.length > lim) tb += '<tr><td colspan="6" style="color:var(--ink-faint)">… ' + (HC.rows.length - lim) + ' more, all drawn</td></tr>';
+  $('harmTable').innerHTML = tb + '</table>';
+}
+
+/* ================= controls ================= */
+var TD = [1e-8, 1e-2], VD = [1e-3, 5];
+function logMap(v, r) { return 1000 * log10(v / r[0]) / log10(r[1] / r[0]); }
+function logUnmap(p, r) { return r[0] * Math.pow(r[1] / r[0], p / 1000); }
+function syncScopeSliders() {
+  $('tdiv').value = logMap(S.scope.tdiv, TD); $('tdivV').textContent = si(S.scope.tdiv, 's') + '/div';
+  $('vdiv').value = logMap(S.scope.vdiv, VD); $('vdivV').textContent = si(S.scope.vdiv, 'V') + '/div';
+  $('hpos').value = S.scope.hpos; $('hposV').textContent = S.scope.hpos.toFixed(2) + ' div';
+  $('trigLvl').value = S.scope.level; $('trigLvlV').textContent = si(S.scope.level, 'V');
+}
+function wire() {
+  $('fsSel').onchange = function () { S.fs = +this.value; S.spec.f1 = S.spec.f2 = null; resetBuffers(); renderChain(); };
+  $('fftSel').onchange = function () { S.nfft = +this.value; S.spec.buf = null; };
+  $('winSel').onchange = function () { S.win = this.value; S.spec.buf = null; };
+  var speedFromSlider = function (p) { return 1e-6 * Math.pow(10, 6 * p / 1000); };
+  var speedLabel = function () {
+    var inv = 1 / S.speed;
+    var r = S.speed >= 0.99 ? '1\u00d7'
+      : '1/' + (inv >= 100 ? Math.round(inv).toLocaleString('en-US') : inv >= 10 ? inv.toFixed(0) : inv.toFixed(1)) + '\u00d7';
+    $('speedV').textContent = r + ' \u00b7 ' + si(S.speed, 's', S.speed >= 0.99 ? 0 : undefined) + ' signal/s';
+  };
+  $('speedSel').oninput = function () { S.speed = speedFromSlider(+this.value); S.carry = 0; speedLabel(); };
+  speedLabel();
+  $('singleBtn').onclick = function () {
+    S.single = true; S.armAt = total; S.running = true;
+    $('runBtn').textContent = 'Running'; $('runBtn').classList.add('on');
+    this.classList.add('on'); this.textContent = 'Armed';
+  };
+  $('stepBtn').onclick = function () {
+    if (S.running) $('runBtn').click();               /* stepping implies paused */
+    stepN(Math.max(1, Math.round(S.scope.tdiv * S.fs)));
+  };
+  $('rollMode').onchange = function () { S.scope.roll = this.checked; };
+  $('fpsSel').onchange = function () { S.fps = +this.value; };
+  $('runBtn').onclick = function () {
+    S.running = !S.running; this.textContent = S.running ? 'Running' : 'Paused';
+    this.classList.toggle('on', S.running);
+  };
+  $('clearBtn').onclick = function () { resetBuffers(); };
+  $('addSel').onchange = function () {
+    if (!this.value) return;
+    S.stages.push(mkStage(this.value)); this.value = '';
+    resetBuffers(); renderChain();
+  };
+  $('tdiv').oninput = function () { S.scope.tdiv = logUnmap(+this.value, TD); $('tdivV').textContent = si(S.scope.tdiv, 's') + '/div'; };
+  $('vdiv').oninput = function () { S.scope.vdiv = logUnmap(+this.value, VD); $('vdivV').textContent = si(S.scope.vdiv, 'V') + '/div'; };
+  $('hpos').oninput = function () { S.scope.hpos = +this.value; $('hposV').textContent = S.scope.hpos.toFixed(2) + ' div'; };
+  $('trigLvl').oninput = function () { S.scope.level = +this.value; $('trigLvlV').textContent = si(S.scope.level, 'V'); };
+  $('trigSel').onchange = function () { S.scope.trig = this.value; };
+  $('trigEdge').onchange = function () { S.scope.edge = +this.value; };
+  $('curOn').onchange = function () { S.scope.cursors = this.checked; };
+  $('persist').onchange = function () { S.scope.persist = this.checked; };
+  $('envMode').onchange = function () { S.scope.env = this.checked; };
+  $('eyeMode').onchange = function () {
+    S.scope.eye = this.checked;
+    if (this.checked) { S.scope.iq = false; $('iqMode').checked = false; }
+  };
+  $('iqMode').onchange = function () {
+    S.scope.iq = this.checked;
+    if (this.checked) { S.scope.eye = false; $('eyeMode').checked = false; }
+  };
+  $('harmN').oninput = function () { S.harm.n = +this.value; $('harmNV').textContent = this.value; };
+  $('harmParts').onchange = function () { S.harm.parts = this.checked; };
+  $('harmSum').onchange = function () { S.harm.sum = this.checked; };
+  $('harmPred').onchange = function () { S.harm.pred = this.checked; };
+  $('harmMeas').onchange = function () { S.harm.meas = this.checked; };
+  ['specLog', 'specRef', 'specRange'].forEach(function (id) {
+    $(id).oninput = $(id).onchange = function () {
+      S.spec.log = $('specLog').value === 'log';
+      S.spec.ref = +$('specRef').value; S.spec.range = +$('specRange').value;
+      $('specRefV').textContent = S.spec.ref + ' dBV'; $('specRangeV').textContent = S.spec.range + ' dB';
+    };
+  });
+  $('showHarm').onchange = function () { S.spec.harm = this.checked; };
+  $('showMask').onchange = function () { S.spec.mask = this.checked; };
+  $('specAvg').onchange = function () { S.spec.avg = this.checked; S.spec.buf = null; };
+  $('specStem').onchange = function () { S.spec.stem = this.checked; };
+  $('specPhase').onchange = function () { S.spec.phase = this.checked; };
+  $('snapBin').onclick = function () {
+    var st = S.stages[0]; if (!st) return;
+    var dfB = S.fs / S.nfft;
+    if (st.wave === 'prbs' || st.wave === 'ook') st.bitrate = Math.max(1, Math.round(st.bitrate / dfB)) * dfB;
+    else if (st.wave !== 'noise' && st.wave !== 'dc') {
+      st.freq = Math.max(1, Math.round(st.freq / dfB)) * dfB;
+      if (st.wave === 'twotone') st.f2 = Math.max(1, Math.round(st.f2 / dfB)) * dfB;
+    }
+    resetBuffers(); renderChain();
+  };
+  $('tfPhase').onchange = function () { S.tf.phase = this.checked; };
+  $('tfStages').onchange = function () { S.tf.stages = this.checked; };
+  $('tfMarkers').onchange = function () { S.tf.markers = this.checked; };
+  $('tfHarm').onchange = function () { S.tf.harm = this.checked; };
+  $('runTests').onclick = runSelfTest;
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
+    t.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (o) { o.classList.remove('on'); });
+      Array.prototype.forEach.call(document.querySelectorAll('.pane'), function (o) { o.classList.remove('on'); });
+      t.classList.add('on'); $(t.dataset.pane).classList.add('on');
+      $('anaTitle').textContent = t.textContent;
+      if (t.dataset.pane === 'testPane' && !$('testOut').innerHTML) runSelfTest();
+    };
+  });
+  /* preset picker */
+  var ps = document.createElement('select');
+  ps.innerHTML = '<option value="">Presets…</option>' + PRESETS.map(function (p, i) { return '<option value="' + i + '">' + p.name + '</option>'; }).join('');
+  ps.onchange = function () { if (this.value !== '') { loadPreset(PRESETS[+this.value]); this.value = ''; } };
+  $('presetBtn').parentNode.replaceChild(ps, $('presetBtn'));
+
+  /* scope interaction */
+  var cv = $('scopeCv'), drag = null;
+  cv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var k = e.deltaY > 0 ? 1.25 : 0.8;
+    if (e.shiftKey) S.scope.vdiv = clamp(S.scope.vdiv * k, VD[0], VD[1]);
+    else S.scope.tdiv = clamp(S.scope.tdiv * k, TD[0], TD[1]);
+    syncScopeSliders();
+  }, { passive: false });
+  cv.addEventListener('pointerdown', function (e) {
+    var r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    drag = { x: e.clientX, hpos: S.scope.hpos, w: r.width, cur: null };
+    if (S.scope.cursors) {
+      var best = null, bd = 0.03;
+      S.scope.cx.forEach(function (c, i) { if (Math.abs(c - fx) < bd) { bd = Math.abs(c - fx); best = ['cx', i]; } });
+      var bd2 = 0.03;
+      S.scope.cy.forEach(function (c, i) { if (Math.abs(c - fy) < bd2) { bd2 = Math.abs(c - fy); best = ['cy', i]; } });
+      drag.cur = best;
+    }
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function (e) {
+    var rh = cv.getBoundingClientRect();
+    S.scope.hoverPx = { x: e.clientX - rh.left, y: e.clientY - rh.top };
+    if (!drag) return;
+    var r = rh;
+    if (drag.cur) {
+      var f = drag.cur[0] === 'cx' ? (e.clientX - r.left) / r.width : (e.clientY - r.top) / r.height;
+      S.scope[drag.cur[0]][drag.cur[1]] = clamp(f, 0, 1);
+    } else {
+      S.scope.hpos = clamp(drag.hpos - (e.clientX - drag.x) / drag.w * 10, -5, 5);
+      syncScopeSliders();
+    }
+  });
+  cv.addEventListener('pointerup', function () { drag = null; });
+  cv.addEventListener('pointerleave', function () { S.scope.hoverPx = null; });
+  /* spectrum interaction */
+  var scv = $('specCv'), sdrag = null;
+  scv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var r = scv.getBoundingClientRect(), rr = specRange(), lo = rr[0], hi = rr[1];
+    var fx = xToF(e.clientX - r.left, lo, hi, r.width);
+    var k = e.deltaY > 0 ? 1.3 : 1 / 1.3;
+    var nlo = clamp(fx - (fx - lo) * k, S.fs / S.nfft * 0.5, S.fs / 2 * 0.99);
+    var nhi = clamp(fx + (hi - fx) * k, nlo * 1.05, S.fs / 2);
+    S.spec.f1 = nlo; S.spec.f2 = nhi;
+  }, { passive: false });
+  scv.addEventListener('pointerdown', function (e) { sdrag = { x: e.clientX, r: specRange(), w: scv.getBoundingClientRect().width }; scv.setPointerCapture(e.pointerId); });
+  scv.addEventListener('pointermove', function (e) {
+    S.spec.hoverPx = e.clientX - scv.getBoundingClientRect().left;
+    if (!sdrag) return;
+    var lo = sdrag.r[0], hi = sdrag.r[1], dx = (e.clientX - sdrag.x) / sdrag.w;
+    if (S.spec.log) {
+      var f = Math.pow(hi / lo, -dx);
+      var nlo = clamp(lo * f, 1, S.fs / 2 * 0.9), nhi = clamp(hi * f, nlo * 1.05, S.fs / 2);
+      S.spec.f1 = nlo; S.spec.f2 = nhi;
+    } else {
+      var sft = -(hi - lo) * dx;
+      S.spec.f1 = Math.max(0, lo + sft); S.spec.f2 = Math.min(S.fs / 2, hi + sft);
+    }
+  });
+  scv.addEventListener('pointerup', function () { sdrag = null; });
+  scv.addEventListener('pointerleave', function () { S.spec.hoverPx = null; });
+  scv.addEventListener('dblclick', function () { S.spec.f1 = S.spec.f2 = null; });
+  /* transfer-function hover */
+  var tcv = $('tfCv');
+  tcv.addEventListener('pointermove', function (e) {
+    var r = tcv.getBoundingClientRect(), lo = Math.max(1, S.fs / 1e6), hi = S.fs / 2;
+    S.tf.hoverF = lo * Math.pow(hi / lo, (e.clientX - r.left) / r.width);
+  });
+  tcv.addEventListener('pointerleave', function () { S.tf.hoverF = null; $('tfReadout').textContent = ''; });
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); $('runBtn').click(); }
+  });
+}
+
+/* ================= main loop ================= */
+var lastFrame = 0, lastMeas = 0, lastSpark = 0, lastDraw = -1e9;
+function frame(t) {
+  var dt = lastFrame ? Math.min(50, t - lastFrame) : 16;
+  lastFrame = t;
+  if (S.running) stepSim(dt);
+  if (S.single && S.running) {
+    var Ws = Math.max(16, Math.min(BUF - 4, Math.round(S.scope.tdiv * 10 * S.fs)));
+    if (singleDone(Ws)) {
+      S.single = false; S.running = false;
+      $('runBtn').textContent = 'Paused'; $('runBtn').classList.remove('on');
+      $('singleBtn').classList.remove('on'); $('singleBtn').textContent = 'Single';
+    }
+  }
+  var due = (t - lastDraw) >= 1000 / S.fps - 2 || !S.running;
+  if (due) { lastDraw = t; }
+  if (due) drawScope();
+  var pane = document.querySelector('.pane.on');
+  if (due && pane && pane.id === 'specPane') drawSpectrum();
+  else if (due && pane && pane.id === 'tfPane') drawTF();
+  else if (due && pane && pane.id === 'harmPane') drawHarmonics();
+  if (t - lastMeas > 200) { drawMeas(); lastMeas = t; }
+  if (t - lastSpark > 500) {
+    S.stages.forEach(function (st, i) { if (st._spark && st.open) drawSpark(st._spark, i); });
+    lastSpark = t;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ================= boot ================= */
+initColors();
+wire();
+loadPreset(PRESETS[0]);
+syncScopeSliders();
+$('specRefV').textContent = S.spec.ref + ' dBV';
+$('specRangeV').textContent = S.spec.range + ' dB';
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Filter Bench — FIR vs IIR, DFT vs FFT, ideal vs real</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0d1520;
+  --ink-2:#0a1119;
+  --panel:#121d2a;
+  --panel-hi:#172533;
+  --rule:#23364c;
+  --rule-soft:#1a2a3c;
+  --text:#d7e3f1;
+  --dim:#7690ac;
+  --dimmer:#4f6480;
+  --fir:#5fe3c0;
+  --iir:#ffb454;
+  --sig:#6ea8ff;
+  --ideal:#ffffff;
+  --alert:#ff6b6b;
+  --violet:#b48ef0;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;
+  background:var(--ink);
+  background-image:
+    linear-gradient(rgba(95,227,192,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(95,227,192,.022) 1px,transparent 1px),
+    radial-gradient(ellipse 120% 60% at 50% -10%,rgba(110,168,255,.10),transparent 70%);
+  background-size:28px 28px,28px 28px,100% 100%;
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+
+/* ---------- nav ---------- */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(10,17,25,.86);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--rule-soft);
+}
+.topbar-in{display:flex;align-items:center;gap:18px;max-width:1160px;margin:0 auto;padding:0 20px;height:50px}
+.brand{font-family:var(--cond);font-weight:700;letter-spacing:.02em;font-size:15px;white-space:nowrap}
+.brand b{color:var(--fir);font-weight:700}
+.navlinks{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;flex:1}
+.navlinks::-webkit-scrollbar{display:none}
+.navlinks a{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;padding:6px 9px;border-radius:3px;white-space:nowrap;
+  transition:color .15s,background .15s;
+}
+.navlinks a:hover,.navlinks a:focus-visible{color:var(--text);background:var(--panel-hi)}
+.navlinks a.on{color:var(--fir);background:rgba(95,227,192,.08)}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 40px;border-bottom:1px solid var(--rule-soft)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+h1{
+  font-family:var(--cond);font-weight:700;font-size:clamp(34px,6.4vw,66px);
+  line-height:.98;letter-spacing:-.015em;margin:14px 0 0;
+}
+h1 .mint{color:var(--fir)}
+h1 .amber{color:var(--iir)}
+.lede{max-width:60ch;color:var(--dim);margin:18px 0 0;font-size:16.5px}
+.lede strong{color:var(--text);font-weight:500}
+
+/* ---------- sections ---------- */
+section{padding:56px 0;border-bottom:1px solid var(--rule-soft)}
+.sec-head{margin-bottom:26px}
+.sec-num{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--dim)}
+.sec-num i{color:var(--fir);font-style:normal}
+h2{font-family:var(--cond);font-weight:700;font-size:clamp(26px,3.6vw,38px);line-height:1.06;letter-spacing:-.01em;margin:8px 0 0}
+h3{font-family:var(--cond);font-weight:600;font-size:19px;margin:0 0 8px;letter-spacing:.005em}
+.sec-head p{max-width:66ch;color:var(--dim);margin:12px 0 0}
+p{margin:0 0 12px}
+a{color:var(--sig)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}
+.panel-head{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:9px 14px;background:var(--panel-hi);border-bottom:1px solid var(--rule);
+}
+.panel-title{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chip{
+  font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:3px;
+  background:var(--ink-2);border:1px solid var(--rule);color:var(--text);white-space:nowrap;
+}
+.chip .k{color:var(--dim)}
+.chip.fir{border-color:rgba(95,227,192,.4);color:var(--fir)}
+.chip.iir{border-color:rgba(255,180,84,.4);color:var(--iir)}
+.chip.bad{border-color:rgba(255,107,107,.5);color:var(--alert)}
+.panel-body{padding:14px}
+.panel-body.tight{padding:10px 14px}
+canvas.plot{display:block;width:100%;height:252px}
+canvas.tall{height:300px}
+canvas.short{height:170px}
+canvas.mini{height:136px}
+.cap{font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 14px 11px;line-height:1.55}
+
+/* ---------- controls ---------- */
+.controls{display:flex;flex-wrap:wrap;gap:8px 20px;padding:12px 14px;border-top:1px solid var(--rule-soft);background:var(--ink-2)}
+.ctl{display:flex;flex-direction:column;gap:5px;min-width:150px;max-width:340px;flex:1 1 170px}
+.ctl-lab{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase}
+.ctl-val{color:var(--text)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:var(--text);border:none}
+input[type=range]::-moz-range-track{height:2px;background:var(--rule);border-radius:2px}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--text)}
+input[type=range]:focus-visible{outline:2px solid var(--sig);outline-offset:4px;border-radius:3px}
+input[type=range].fir::-webkit-slider-thumb{background:var(--fir)}
+input[type=range].fir::-moz-range-thumb{background:var(--fir)}
+input[type=range].iir::-webkit-slider-thumb{background:var(--iir)}
+input[type=range].iir::-moz-range-thumb{background:var(--iir)}
+.seg{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden;align-self:flex-start}
+.seg button{
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:5px 10px;
+  background:var(--ink-2);color:var(--dim);border:none;border-right:1px solid var(--rule);cursor:pointer;
+  transition:background .13s,color .13s;
+}
+.seg button:last-child{border-right:none}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed=true]{background:var(--panel-hi);color:var(--fir)}
+.seg button:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
+.btn{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:7px 14px;background:var(--panel-hi);color:var(--text);
+  border:1px solid var(--rule);border-radius:3px;cursor:pointer;transition:border-color .15s,color .15s;
+}
+.btn:hover{border-color:var(--fir);color:var(--fir)}
+.btn:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+.btn[disabled]{opacity:.45;cursor:progress}
+
+/* ---------- layout helpers ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid2u{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}
+.stack{display:flex;flex-direction:column;gap:18px}
+@media (max-width:820px){.grid2,.grid2u{grid-template-columns:1fr}}
+@media (max-width:640px){
+  table{font-size:11.5px;table-layout:fixed}
+  th,td{padding:6px 7px;overflow-wrap:anywhere;hyphens:auto}
+  .chips{flex-wrap:wrap;gap:6px}
+  .ctl-row{grid-template-columns:1fr}
+  h2{font-size:26px;line-height:1.12}
+  .plate{padding:14px 12px}
+  .panel-head{flex-wrap:wrap;row-gap:6px}
+  .eq{overflow-x:auto;font-size:12px;-webkit-overflow-scrolling:touch}
+}
+
+/* ---------- prose blocks ---------- */
+.keybox{border-left:2px solid var(--fir);background:rgba(95,227,192,.05);padding:12px 16px;margin:16px 0;border-radius:0 3px 3px 0}
+.keybox.amber{border-left-color:var(--iir);background:rgba(255,180,84,.05)}
+.keybox.red{border-left-color:var(--alert);background:rgba(255,107,107,.05)}
+.keybox p:last-child{margin-bottom:0}
+.keybox .lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:6px}
+.eq{
+  font-family:var(--mono);font-size:14px;background:var(--ink-2);border:1px solid var(--rule-soft);
+  border-radius:3px;padding:11px 14px;margin:10px 0;overflow-x:auto;white-space:nowrap;color:var(--text)
+}
+.eq .c-fir{color:var(--fir)}
+.eq .c-iir{color:var(--iir)}
+.eq .cm{color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:500}
+td:first-child{font-family:var(--mono);font-size:12px;color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.yes{color:var(--fir)}.no{color:var(--alert)}.mid{color:var(--iir)}
+ul.tick{list-style:none;padding:0;margin:0}
+ul.tick li{padding-left:20px;position:relative;margin-bottom:7px;color:var(--dim)}
+ul.tick li::before{content:"—";position:absolute;left:0;color:var(--fir);font-family:var(--mono)}
+ul.tick li b{color:var(--text);font-weight:500}
+ul.tick.amber li::before{color:var(--iir)}
+
+/* schematics */
+.schem{width:100%;height:auto;display:block}
+.schem .wire{stroke:var(--dim);stroke-width:1.4;fill:none}
+.schem .wire-fb{stroke:var(--iir);stroke-width:1.5;fill:none}
+.schem .part{stroke:var(--text);stroke-width:1.5;fill:none}
+.schem .part-fill{fill:var(--panel-hi);stroke:var(--text);stroke-width:1.4}
+.schem text{font-family:var(--mono);font-size:11px;fill:var(--dim)}
+.schem text.hi{fill:var(--text)}
+.schem text.mint{fill:var(--fir)}
+.schem text.amber{fill:var(--iir)}
+
+footer{padding:44px 0 70px;color:var(--dim);font-size:13px}
+footer .mono{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 14px 12px}
+.legend i{display:inline-block;width:16px;height:2px;vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">THE FILTER <b>BENCH</b></div>
+    <nav class="navlinks" id="nav">
+      <a href="#impulse">01 Impulse</a>
+      <a href="#wiring">02 Wiring</a>
+      <a href="#poles">03 Poles</a>
+      <a href="#build">04 Analog / Digital</a>
+      <a href="#family">05 Fourier family</a>
+      <a href="#fft">06 DFT vs FFT</a>
+      <a href="#brickwall">07 Ideal filter</a>
+      <a href="#leakage">08 Ideal spectrum</a>
+      <a href="#quant">09 Finite words</a>
+      <a href="#alias">10 Sampling</a>
+      <a href="#cheat">Cheat sheet</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Digital signal processing · a bench you can poke</div>
+    <h1>One impulse in.<br><span class="mint">Two</span> very different <span class="amber">answers</span>.</h1>
+    <p class="lede">Hit a filter with a single sample and watch what comes back. That one experiment separates <strong>FIR from IIR</strong>, tells you whether the thing can be built from a capacitor or needs a shift register, and explains why the <strong>ideal</strong> filter in the textbook never shows up in your lab.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section style="padding-top:34px">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Live · impulse response race</span>
+      <div class="chips">
+        <span class="chip fir" id="heroFirChip"><span class="k">FIR</span> —</span>
+        <span class="chip iir" id="heroIirChip"><span class="k">IIR</span> —</span>
+        <span class="chip" id="heroN"><span class="k">n =</span> 0</span>
+      </div>
+    </div>
+    <canvas class="plot tall" id="heroCv"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--fir)"></i>FIR · 16-tap moving average</span>
+      <span><i style="background:var(--iir)"></i>IIR · one-pole, a = 0.93</span>
+      <span><i style="background:var(--dim)"></i>input δ[n]</span>
+    </div>
+    <div class="controls">
+      <button class="btn" id="heroPlay">Pause</button>
+      <button class="btn" id="heroReset">Replay</button>
+      <div class="ctl" style="max-width:280px">
+        <div class="ctl-lab"><span>IIR feedback a</span><span class="ctl-val" id="heroAV">0.930</span></div>
+        <input type="range" class="iir" id="heroA" min="0.5" max="0.985" step="0.005" value="0.93">
+      </div>
+    </div>
+  </div>
+  <div class="keybox">
+    <span class="lab">The whole page in one line</span>
+    <p>The FIR output is <strong>exactly zero</strong> from sample 16 onward — its memory ran out. The IIR output gets smaller forever but <strong>never reaches zero</strong>, because part of its output is fed back into its own input. Everything else follows from that.</p>
+  </div>
+</section>
+
+<!-- ========== 01 IMPULSE ========== -->
+<section id="impulse">
+  <div class="sec-head">
+    <div class="sec-num"><i>01</i> · TIME DOMAIN</div>
+    <h2>The impulse response is the filter</h2>
+    <p>Feed in δ[n] — one sample of 1, then silence. What comes out is h[n], and it contains everything: knowing h[n] means you can predict the output for any input by convolution. The response is either <span style="color:var(--fir)">finite</span> or it is <span style="color:var(--iir)">infinite</span>. There is no third option, and that is literally the naming scheme.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Impulse · step · frequency response</span>
+      <div class="chips">
+        <span class="chip" id="expOrder"><span class="k">multiplies/sample</span> —</span>
+        <span class="chip" id="expTail"><span class="k">samples to settle</span> —</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot" id="expImp"></canvas>
+          <div class="cap">h[n] — impulse response. Stems are individual samples.</div>
+        </div>
+        <div>
+          <canvas class="plot" id="expMag"></canvas>
+          <div class="cap">|H(e<sup>jω</sup>)| in dB — what it does to each frequency.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Filter type">
+        <button data-exp="ma" aria-pressed="true">FIR moving avg</button>
+        <button data-exp="sinc" aria-pressed="false">FIR windowed sinc</button>
+        <button data-exp="one" aria-pressed="false">IIR one-pole</button>
+        <button data-exp="bi" aria-pressed="false">IIR biquad</button>
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span id="expP1L">Taps N</span><span class="ctl-val" id="expP1V">16</span></div>
+        <input type="range" id="expP1" min="2" max="64" step="1" value="16">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span id="expP2L">Cutoff</span><span class="ctl-val" id="expP2V">0.20</span></div>
+        <input type="range" id="expP2" min="0.02" max="0.9" step="0.01" value="0.2">
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="keybox">
+      <span class="lab">Read the left plot</span>
+      <p>FIR: the stems stop. The filter only ever looks at the last N input samples, so after N samples of silence it has nothing left to say.</p>
+    </div>
+    <div class="keybox amber">
+      <span class="lab">Read it again for IIR</span>
+      <p>IIR: the stems decay geometrically. Each output sample is partly a recycled previous output, so the ringing shrinks by a constant factor forever. "Settled" only ever means "below my noise floor".</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 02 WIRING ========== -->
+<section id="wiring">
+  <div class="sec-head">
+    <div class="sec-num"><i>02</i> · STRUCTURE</div>
+    <h2>Where the difference actually lives: one wire</h2>
+    <p>Both filters are built from the same three pieces — a delay, a multiply, an add. The only structural difference is whether a wire runs backward from the output.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">FIR · feed-forward only</span><div class="chips"><span class="chip fir">no feedback</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 190" role="img" aria-label="FIR direct form: a chain of delay elements, each tapped into a multiplier and summed">
+          <line class="wire" x1="14" y1="34" x2="360" y2="34"/>
+          <text x="10" y="24" class="hi">x[n]</text>
+          <rect class="part-fill" x="96" y="20" width="46" height="28" rx="2"/><text x="107" y="39">z⁻¹</text>
+          <rect class="part-fill" x="184" y="20" width="46" height="28" rx="2"/><text x="195" y="39">z⁻¹</text>
+          <rect class="part-fill" x="272" y="20" width="46" height="28" rx="2"/><text x="283" y="39">z⁻¹</text>
+          <g stroke="var(--fir)" stroke-width="1.4" fill="none">
+            <line x1="60" y1="34" x2="60" y2="96"/><line x1="164" y1="34" x2="164" y2="96"/>
+            <line x1="252" y1="34" x2="252" y2="96"/><line x1="340" y1="34" x2="340" y2="96"/>
+            <circle cx="60" cy="34" r="2.6" fill="var(--fir)"/><circle cx="164" cy="34" r="2.6" fill="var(--fir)"/>
+            <circle cx="252" cy="34" r="2.6" fill="var(--fir)"/>
+            <polygon points="52,96 68,96 60,116"/><polygon points="156,96 172,96 164,116"/>
+            <polygon points="244,96 260,96 252,116"/><polygon points="332,96 348,96 340,116"/>
+          </g>
+          <text x="40" y="92" class="mint">b₀</text><text x="144" y="92" class="mint">b₁</text>
+          <text x="232" y="92" class="mint">b₂</text><text x="320" y="92" class="mint">b₃</text>
+          <line class="wire" x1="60" y1="116" x2="60" y2="146"/><line class="wire" x1="164" y1="116" x2="164" y2="146"/>
+          <line class="wire" x1="252" y1="116" x2="252" y2="146"/><line class="wire" x1="340" y1="116" x2="340" y2="146"/>
+          <line class="wire" x1="60" y1="146" x2="340" y2="146"/>
+          <circle class="part-fill" cx="380" cy="146" r="13"/><text x="374" y="151" class="hi">+</text>
+          <line class="wire" x1="340" y1="146" x2="367" y2="146"/>
+          <line class="wire" x1="393" y1="146" x2="414" y2="146"/>
+          <text x="386" y="178" class="hi">y[n]</text>
+        </svg>
+        <div class="eq">y[n] = <span class="c-fir">b₀</span>x[n] + <span class="c-fir">b₁</span>x[n−1] + <span class="c-fir">b₂</span>x[n−2] + <span class="c-fir">b₃</span>x[n−3]</div>
+        <p style="color:var(--dim);margin:0;font-size:14px">Output depends only on inputs. The signal enters on the left and leaves on the right. Nothing circulates.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">IIR · feed-forward + feedback</span><div class="chips"><span class="chip iir">recursive</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 190" role="img" aria-label="IIR direct form: same feed-forward chain plus a feedback path from output through delays back to the summer">
+          <line class="wire" x1="14" y1="30" x2="150" y2="30"/>
+          <text x="10" y="20" class="hi">x[n]</text>
+          <rect class="part-fill" x="60" y="16" width="46" height="28" rx="2"/><text x="71" y="35">z⁻¹</text>
+          <g stroke="var(--fir)" stroke-width="1.4" fill="none">
+            <line x1="36" y1="30" x2="36" y2="62"/><line x1="132" y1="30" x2="132" y2="62"/>
+            <circle cx="36" cy="30" r="2.6" fill="var(--fir)"/>
+            <polygon points="28,62 44,62 36,80"/><polygon points="124,62 140,62 132,80"/>
+          </g>
+          <text x="14" y="58" class="mint">b₀</text><text x="110" y="58" class="mint">b₁</text>
+          <line class="wire" x1="36" y1="80" x2="36" y2="98"/><line class="wire" x1="132" y1="80" x2="132" y2="98"/>
+          <line class="wire" x1="36" y1="98" x2="176" y2="98"/>
+          <circle class="part-fill" cx="192" cy="98" r="14"/><text x="186" y="103" class="hi">+</text>
+          <line class="wire" x1="206" y1="98" x2="404" y2="98"/>
+          <text x="378" y="88" class="hi">y[n]</text>
+          <circle cx="300" cy="98" r="2.6" fill="var(--iir)"/>
+          <g class="wire-fb">
+            <line x1="300" y1="98" x2="300" y2="140"/>
+            <line x1="300" y1="140" x2="330" y2="140"/>
+          </g>
+          <rect class="part-fill" x="330" y="126" width="46" height="28" rx="2"/><text x="341" y="145">z⁻¹</text>
+          <g class="wire-fb">
+            <line x1="330" y1="140" x2="330" y2="140"/>
+            <line x1="376" y1="140" x2="392" y2="140"/><line x1="392" y1="140" x2="392" y2="168"/>
+            <line x1="392" y1="168" x2="240" y2="168"/>
+            <polygon points="240,160 240,176 222,168" fill="var(--iir)" stroke="none"/>
+            <line x1="222" y1="168" x2="192" y2="168"/><line x1="192" y1="168" x2="192" y2="112"/>
+          </g>
+          <text x="238" y="186" class="amber">−a₁</text>
+        </svg>
+        <div class="eq">y[n] = <span class="c-fir">b₀</span>x[n] + <span class="c-fir">b₁</span>x[n−1] <span class="c-iir">− a₁·y[n−1]</span></div>
+        <p style="color:var(--dim);margin:0;font-size:14px">That amber loop is the entire story. Output re-enters the summer, so a single input keeps circulating, attenuated a little each lap.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="panel-title">Trade study</span></div>
+    <table>
+      <tr><th>Property</th><th style="color:var(--fir)">FIR</th><th style="color:var(--iir)">IIR</th></tr>
+      <tr><td>Stability</td><td class="yes">Unconditional. No poles to run away.</td><td class="mid">Conditional — poles must stay inside the unit circle.</td></tr>
+      <tr><td>Linear phase</td><td class="yes">Free, if coefficients are symmetric. Constant group delay.</td><td class="no">Not achievable causally. Phase warps near cutoff.</td></tr>
+      <tr><td>Order for a spec</td><td class="no">High. A sharp 60 dB lowpass can need 100+ taps.</td><td class="yes">Low. Same spec in a 4th–8th order biquad chain.</td></tr>
+      <tr><td>Cost per sample</td><td class="no">N multiply-accumulates.</td><td class="yes">Typically 5 MACs per biquad.</td></tr>
+      <tr><td>Coefficient rounding</td><td class="yes">Degrades the response, gently.</td><td class="no">Moves poles. Can oscillate or blow up.</td></tr>
+      <tr><td>Arithmetic quirks</td><td class="yes">No feedback ⇒ no limit cycles.</td><td class="no">Limit cycles, overflow oscillation, needs care in fixed point.</td></tr>
+      <tr><td>Transient</td><td class="yes">Settles in exactly N samples.</td><td class="mid">Exponential; "settled" is a threshold you pick.</td></tr>
+      <tr><td>Natural home</td><td class="mid">Digital. Needs exact delays.</td><td class="mid">Analog <em>and</em> digital. Any RC network is one.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 03 POLES ========== -->
+<section id="poles">
+  <div class="sec-head">
+    <div class="sec-num"><i>03</i> · Z-PLANE</div>
+    <h2>Why feedback is dangerous, drawn as a picture</h2>
+    <p>Write the filter as H(z) = B(z)/A(z). Roots of the numerator are <strong>zeros</strong> — frequencies killed. Roots of the denominator are <strong>poles</strong> — frequencies amplified. A pole is only stable if it sits inside the unit circle, and feedback is what creates poles. An FIR filter's denominator is 1, so all its poles pile up harmlessly at the origin.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Drag the pole, or use the sliders</span>
+      <div class="chips">
+        <span class="chip" id="pzR"><span class="k">|p| =</span> 0.90</span>
+        <span class="chip" id="pzQ"><span class="k">Q ≈</span> —</span>
+        <span class="chip" id="pzStab">stable</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot tall" id="pzCircle" style="cursor:crosshair"></canvas>
+          <div class="cap">z-plane — drag inside it to move the pole. ✕ = pole, ○ = zero.</div>
+        </div>
+        <div>
+          <canvas class="plot tall" id="pzResp"></canvas>
+          <div class="cap">Resulting impulse response. Radius sets the decay rate, angle sets the ringing frequency.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <div class="ctl-lab"><span>Pole radius |p|</span><span class="ctl-val" id="pzRV">0.90</span></div>
+        <input type="range" class="iir" id="pzRad" min="0" max="1.06" step="0.005" value="0.9">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Pole angle ω₀</span><span class="ctl-val" id="pzAV">0.25 π</span></div>
+        <input type="range" class="iir" id="pzAng" min="0" max="1" step="0.005" value="0.25">
+      </div>
+    </div>
+  </div>
+  <div class="keybox red">
+    <span class="lab">Push |p| past 1.00</span>
+    <p>The impulse response grows without bound from a single input sample. Nothing external is driving it — the loop gain simply exceeds unity. This failure mode does not exist for FIR, at any coefficient value, ever.</p>
+  </div>
+</section>
+
+<!-- ========== 04 BUILD ========== -->
+<section id="build">
+  <div class="sec-head">
+    <div class="sec-num"><i>04</i> · IMPLEMENTATION</div>
+    <h2>Building it from parts: capacitors or registers</h2>
+    <p>The two domains pull in opposite directions. Analog components store energy and leak it back — that is feedback, so analog gets you IIR almost for free and FIR only with pain. Digital hardware has a perfect, free, exact delay — a flip-flop — so it gets you FIR trivially and IIR with caveats.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Analog · RC lowpass = a one-pole IIR</span><div class="chips"><span class="chip iir">2 parts</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 200" role="img" aria-label="RC lowpass filter: resistor in series, capacitor to ground, output taken across the capacitor"><g transform="translate(0,26)">
+          <circle class="part" cx="22" cy="46" r="4"/><text x="8" y="34" class="hi">Vin</text>
+          <line class="wire" x1="26" y1="46" x2="118" y2="46"/>
+          <path class="part" d="M118,46 h8 l7,-11 l13,22 l13,-22 l13,22 l13,-22 l7,11 h8"/>
+          <text x="150" y="26" class="mint">R</text>
+          <line class="wire" x1="200" y1="46" x2="360" y2="46"/>
+          <circle cx="262" cy="46" r="3" fill="var(--dim)"/>
+          <line class="wire" x1="262" y1="46" x2="262" y2="76"/>
+          <line class="part" x1="242" y1="76" x2="282" y2="76"/>
+          <line class="part" x1="242" y1="86" x2="282" y2="86"/>
+          <text x="292" y="86" class="mint">C</text>
+          <line class="wire" x1="262" y1="86" x2="262" y2="106"/>
+          <line class="part" x1="246" y1="106" x2="278" y2="106"/>
+          <line class="part" x1="253" y1="112" x2="271" y2="112"/>
+          <line class="part" x1="259" y1="118" x2="265" y2="118"/>
+          <circle class="part" cx="366" cy="46" r="4"/><text x="352" y="34" class="hi">Vout</text>
+        </g></svg>
+        <div class="eq">H(s) = 1 / (1 + sRC) &nbsp;&nbsp;<span class="cm">→</span>&nbsp;&nbsp; h(t) = (1/RC)·e<sup>−t/RC</sup></div>
+        <p style="color:var(--dim);margin:0;font-size:14px">The capacitor's stored charge <em>is</em> the state variable. Its voltage feeds back through R to oppose the input. Exponential decay, never zero — an infinite impulse response made of two passive parts.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Analog · Sallen–Key = a 2-pole IIR (biquad)</span><div class="chips"><span class="chip iir">Q from feedback</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 200" role="img" aria-label="Sallen-Key lowpass: R1 and R2 in series into the op-amp non-inverting input, C1 from that node to ground, C2 feeding back from the output to the R1-R2 junction, and unity-gain feedback to the inverting input">
+          <circle class="part" cx="18" cy="70" r="4"/><text x="4" y="58" class="hi">Vin</text>
+          <line class="wire" x1="22" y1="70" x2="46" y2="70"/>
+          <path class="part" d="M46,70 h6 l5,-9 l10,18 l10,-18 l10,18 l10,-18 l5,9 h6"/>
+          <text x="66" y="58" class="mint">R1</text>
+          <line class="wire" x1="108" y1="70" x2="126" y2="70"/>
+          <path class="part" d="M126,70 h6 l5,-9 l10,18 l10,-18 l10,18 l10,-18 l5,9 h6"/>
+          <text x="150" y="58" class="mint">R2</text>
+          <line class="wire" x1="188" y1="70" x2="240" y2="70"/>
+          <line class="wire" x1="214" y1="70" x2="214" y2="92"/>
+          <line class="part" x1="202" y1="92" x2="226" y2="92"/>
+          <line class="part" x1="202" y1="101" x2="226" y2="101"/>
+          <text x="168" y="101" class="mint">C1</text>
+          <line class="wire" x1="214" y1="101" x2="214" y2="136"/>
+          <line class="part" x1="200" y1="136" x2="228" y2="136"/>
+          <line class="part" x1="206" y1="142" x2="222" y2="142"/>
+          <line class="part" x1="211" y1="148" x2="217" y2="148"/>
+          <polygon class="part-fill" points="240,40 240,100 292,70"/>
+          <text x="247" y="58">+</text><text x="247" y="92">−</text>
+          <line class="wire" x1="292" y1="70" x2="384" y2="70"/>
+          <circle class="part" cx="390" cy="70" r="4"/><text x="368" y="58" class="hi">Vout</text>
+          <circle cx="320" cy="70" r="3" fill="var(--dim)"/>
+          <path class="wire" d="M320,70 V118 H234 V90 H240"/>
+          <text x="248" y="132">unity-gain feedback</text>
+          <circle cx="344" cy="70" r="3" fill="var(--iir)"/>
+          <circle cx="118" cy="70" r="3" fill="var(--iir)"/>
+          <path class="wire-fb" d="M118,70 V53"/>
+          <line class="part" x1="104" y1="53" x2="132" y2="53" stroke="var(--iir)"/>
+          <line class="part" x1="104" y1="44" x2="132" y2="44" stroke="var(--iir)"/>
+          <path class="wire-fb" d="M118,44 V20 H344 V70"/>
+          <text x="138" y="32" class="amber">C2</text>
+          <text x="140" y="180" class="amber">C2 is the feedback that sets Q</text>
+        </svg>
+        <div class="eq"><span class="cm">two poles ⇒</span> H(s) = ω₀² / (s² + <span class="c-iir">(ω₀/Q)</span>s + ω₀²)</div>
+        <p style="color:var(--dim);margin:0;font-size:14px">C2 bootstraps the mid-node from the output — positive feedback that sets Q. Cascade a few and you have an elliptic anti-aliasing filter. This is the analog world's default answer to everything.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Live · the same filter, both ways</span>
+      <div class="chips">
+        <span class="chip iir" id="rcTau"><span class="k">τ = RC</span> —</span>
+        <span class="chip" id="rcAlpha"><span class="k">a = e^(−T/RC)</span> —</span>
+        <span class="chip" id="rcFc"><span class="k">f−3dB</span> —</span>
+      </div>
+    </div>
+    <canvas class="plot" id="rcCv"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--ideal)"></i>analog RC step response, continuous</span>
+      <span><i style="background:var(--iir)"></i>digital one-pole IIR, sampled at f<sub>s</sub></span>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <div class="ctl-lab"><span>RC time constant</span><span class="ctl-val" id="rcTV">1.0 ms</span></div>
+        <input type="range" class="iir" id="rcT" min="0.2" max="6" step="0.05" value="1">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Sample rate f<sub>s</sub></span><span class="ctl-val" id="rcFsV">10 kHz</span></div>
+        <input type="range" id="rcFs" min="1" max="60" step="1" value="10">
+      </div>
+    </div>
+    <div class="cap">Drop f<sub>s</sub> and the digital version stops tracking the analog curve — not because the maths changed, but because you are sampling a continuous system too slowly to represent it.</div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Analog FIR · the hard way</span><div class="chips"><span class="chip bad">needs real delay</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 168" role="img" aria-label="Analog transversal filter: a delay line with four taps, each through a weighting attenuator into a summing amplifier">
+          <circle class="part" cx="16" cy="34" r="4"/><text x="4" y="22" class="hi">Vin</text>
+          <line class="wire" x1="20" y1="34" x2="40" y2="34"/>
+          <rect class="part-fill" x="40" y="20" width="280" height="28" rx="2"/>
+          <text x="92" y="38" class="hi">delay line — coax / SAW / CCD</text>
+          <g stroke="var(--fir)" stroke-width="1.3" fill="none">
+            <line x1="90" y1="48" x2="90" y2="64"/><line x1="160" y1="48" x2="160" y2="64"/>
+            <line x1="230" y1="48" x2="230" y2="64"/><line x1="300" y1="48" x2="300" y2="64"/>
+            <path d="M90,64 l-6,4 l12,7 l-12,7 l12,7 l-6,4"/>
+            <path d="M160,64 l-6,4 l12,7 l-12,7 l12,7 l-6,4"/>
+            <path d="M230,64 l-6,4 l12,7 l-12,7 l12,7 l-6,4"/>
+            <path d="M300,64 l-6,4 l12,7 l-12,7 l12,7 l-6,4"/>
+            <line x1="90" y1="93" x2="90" y2="118"/><line x1="160" y1="93" x2="160" y2="118"/>
+            <line x1="230" y1="93" x2="230" y2="118"/><line x1="300" y1="93" x2="300" y2="118"/>
+          </g>
+          <text x="72" y="60" class="mint">τ</text><text x="140" y="60" class="mint">2τ</text>
+          <text x="210" y="60" class="mint">3τ</text><text x="280" y="60" class="mint">4τ</text>
+          <line class="wire" x1="90" y1="118" x2="338" y2="118"/>
+          <polygon class="part-fill" points="340,100 340,136 382,118"/>
+          <text x="348" y="122" class="hi">Σ</text>
+          <line class="wire" x1="382" y1="118" x2="404" y2="118"/>
+          <circle class="part" cx="410" cy="118" r="4"/>
+          <text x="386" y="152" class="hi">y(t)</text>
+        </svg>
+        <ul class="tick" style="margin-top:12px">
+          <li><b>The delay is the problem.</b> A 10 µs analog delay is 2 km of coax or a bulky LC ladder that disperses and attenuates.</li>
+          <li><b>Taps drift.</b> Resistor tolerance and temperature move your coefficients around after the board is built.</li>
+          <li><b>It is done anyway</b> where nothing else works: SAW transversal filters, CCD/bucket-brigade lines, microwave tapped-line filters, and optical FIR built from splitters and fibre delays.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Digital FIR · the easy way</span><div class="chips"><span class="chip fir">delay is free</span></div></div>
+      <div class="panel-body">
+        <svg class="schem" viewBox="0 0 420 168" role="img" aria-label="Digital FIR: a shift register of three flip-flops sharing a clock, four taps into hardware multipliers, all summed into the output">
+          <line class="wire" x1="30" y1="8" x2="300" y2="8" stroke-dasharray="3 3"/>
+          <text x="4" y="12">clk</text>
+          <g class="wire"><line x1="65" y1="8" x2="65" y2="18"/><line x1="143" y1="8" x2="143" y2="18"/><line x1="221" y1="8" x2="221" y2="18"/></g>
+          <text x="4" y="36" class="hi">x[n]</text>
+          <line class="wire" x1="30" y1="40" x2="40" y2="40"/>
+          <circle cx="30" cy="40" r="2.6" fill="var(--fir)"/>
+          <rect class="part-fill" x="40" y="24" width="50" height="32" rx="2"/><text x="54" y="44" class="hi">FF</text>
+          <rect class="part-fill" x="118" y="24" width="50" height="32" rx="2"/><text x="132" y="44" class="hi">FF</text>
+          <rect class="part-fill" x="196" y="24" width="50" height="32" rx="2"/><text x="210" y="44" class="hi">FF</text>
+          <path class="part" d="M40,48 l7,-5 l-7,-5" stroke-width="1.1"/>
+          <path class="part" d="M118,48 l7,-5 l-7,-5" stroke-width="1.1"/>
+          <path class="part" d="M196,48 l7,-5 l-7,-5" stroke-width="1.1"/>
+          <line class="wire" x1="90" y1="40" x2="118" y2="40"/>
+          <line class="wire" x1="168" y1="40" x2="196" y2="40"/>
+          <line class="wire" x1="246" y1="40" x2="274" y2="40"/>
+          <g stroke="var(--fir)" stroke-width="1.3" fill="none">
+            <line x1="30" y1="40" x2="30" y2="80"/><line x1="104" y1="40" x2="104" y2="80"/>
+            <line x1="182" y1="40" x2="182" y2="80"/><line x1="260" y1="40" x2="260" y2="80"/>
+            <line x1="30" y1="104" x2="30" y2="128"/><line x1="104" y1="104" x2="104" y2="128"/>
+            <line x1="182" y1="104" x2="182" y2="128"/><line x1="260" y1="104" x2="260" y2="128"/>
+          </g>
+          <circle cx="104" cy="40" r="2.6" fill="var(--fir)"/><circle cx="182" cy="40" r="2.6" fill="var(--fir)"/>
+          <circle cx="260" cy="40" r="2.6" fill="var(--fir)"/>
+          <g class="part-fill" stroke="var(--fir)">
+            <rect x="12" y="80" width="36" height="24" rx="2"/><rect x="86" y="80" width="36" height="24" rx="2"/>
+            <rect x="164" y="80" width="36" height="24" rx="2"/><rect x="242" y="80" width="36" height="24" rx="2"/>
+          </g>
+          <g fill="var(--fir)" font-family="var(--mono)" font-size="11">
+            <text x="20" y="97">×b₀</text><text x="94" y="97">×b₁</text>
+            <text x="172" y="97">×b₂</text><text x="250" y="97">×b₃</text>
+          </g>
+          <line class="wire" x1="30" y1="128" x2="292" y2="128"/>
+          <circle class="part-fill" cx="306" cy="128" r="13"/><text x="300" y="133" class="hi">+</text>
+          <line class="wire" x1="319" y1="128" x2="392" y2="128"/>
+          <polygon points="392,124 392,132 402,128" fill="var(--dim)"/>
+          <text x="360" y="120" class="hi">y[n]</text>
+        </svg>
+        <ul class="tick" style="margin-top:12px">
+          <li><b>z⁻¹ is one flip-flop.</b> Exact, drift-free, temperature-independent, free on any FPGA.</li>
+          <li><b>Coefficients are numbers in a ROM.</b> Change the filter by rewriting memory, not by unsoldering.</li>
+          <li><b>It maps to silicon directly.</b> One DSP slice per tap in a systolic chain; symmetric taps fold, halving the multipliers.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="panel-title">Which domain wants which filter</span></div>
+    <table>
+      <tr><th></th><th>Analog</th><th>Digital</th></tr>
+      <tr><td>Delay z⁻¹ / τ</td><td class="no">Expensive, lossy, dispersive</td><td class="yes">One register. Exact.</td></tr>
+      <tr><td>Multiply by a constant</td><td class="mid">Resistor ratio, ±1% and drifting</td><td class="yes">Exact to the bit you allocate</td></tr>
+      <tr><td>Feedback / memory</td><td class="yes">Intrinsic — every C and L stores state</td><td class="mid">Deliberate, and needs stability analysis</td></tr>
+      <tr><td>So you naturally get…</td><td class="mid">IIR</td><td class="yes">FIR (and IIR if you want it)</td></tr>
+      <tr><td>Runs at</td><td class="yes">GHz, zero latency, no clock</td><td class="no">Bounded by f<sub>s</sub>, plus converter latency</td></tr>
+      <tr><td>Still mandatory for</td><td class="mid">Anti-alias + reconstruction. Digital cannot fix what the ADC already folded.</td><td class="mid">Anything needing exact linear phase or reconfigurability</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 05 FOURIER FAMILY ========== -->
+<section id="family">
+  <div class="sec-head">
+    <div class="sec-num"><i>05</i> · TRANSFORMS</div>
+    <h2>Fourier transform, DFT, FFT — one is not like the others</h2>
+    <p>These three names get used interchangeably and they are not the same kind of thing. Two are <strong>transforms</strong> — definitions in mathematics. One is an <strong>algorithm</strong> — a way of computing one of the transforms quickly. The confusion is worth clearing up because it decides what your spectrum plot actually means.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Four transforms · time on the left, frequency on the right</span>
+      <div class="chips"><span class="chip"><span class="k">rule</span> discrete in one domain ⇒ periodic in the other</span></div>
+    </div>
+    <div class="panel-body">
+      <div class="grid2">
+        <div>
+          <h3>Continuous-time Fourier transform</h3>
+          <canvas class="plot mini" id="famCFT"></canvas>
+          <div class="cap" style="padding:8px 0 0">Continuous, infinite duration in → continuous, infinite in frequency. An integral. A computer cannot evaluate it: infinitely many inputs, infinitely many outputs.</div>
+        </div>
+        <div>
+          <h3>Fourier series</h3>
+          <canvas class="plot mini" id="famFS"></canvas>
+          <div class="cap" style="padding:8px 0 0">Continuous but <em>periodic</em> in → discrete harmonic lines out. Periodicity in time quantises the frequency axis.</div>
+        </div>
+        <div>
+          <h3>Discrete-time Fourier transform (DTFT)</h3>
+          <canvas class="plot mini" id="famDTFT"></canvas>
+          <div class="cap" style="padding:8px 0 0">Sampled but infinitely long in → continuous and <em>periodic</em> out. Sampling in time makes the spectrum repeat every f<sub>s</sub>. Still not computable: infinite sum, continuous output.</div>
+        </div>
+        <div>
+          <h3>Discrete Fourier transform (DFT)</h3>
+          <canvas class="plot mini" id="famDFT"></canvas>
+          <div class="cap" style="padding:8px 0 0">N samples in → N complex bins out. Finite both ways. <strong>This is the only one a machine ever computes</strong>, and it is what every spectrum analyser and every <code>np.fft</code> call returns.</div>
+        </div>
+      </div>
+      <div class="eq" style="margin-top:16px">DFT: &nbsp; X[k] = Σ<sub>n=0..N−1</sub> x[n]·e<sup>−j2πkn/N</sup> &nbsp;&nbsp;<span class="cm">k = 0 … N−1</span></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="keybox">
+      <span class="lab">The part that trips people up</span>
+      <p>The DFT does not analyse "your signal". It analyses <strong>an infinite periodic repetition of your N samples</strong>. That assumption is baked into the definition, and it is the direct cause of spectral leakage in §08.</p>
+    </div>
+    <div class="keybox amber">
+      <span class="lab">FFT is not a transform</span>
+      <p>The FFT is a family of algorithms — Cooley–Tukey, radix-2, split-radix, Bluestein — that compute <strong>exactly the DFT</strong>, just without the redundant work. Same inputs, same outputs, same maths. Only the operation count differs.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 06 DFT vs FFT ========== -->
+<section id="fft">
+  <div class="sec-head">
+    <div class="sec-num"><i>06</i> · ALGORITHM</div>
+    <h2>Prove it: same numbers, wildly different clock time</h2>
+    <p>Below, the naive O(N²) DFT and a radix-2 FFT run on the same random data, in your browser, right now. Compare the outputs and compare the times.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Live benchmark · your machine</span>
+      <div class="chips">
+        <span class="chip" id="bmN"><span class="k">N</span> 1024</span>
+        <span class="chip" id="bmDft"><span class="k">DFT</span> —</span>
+        <span class="chip fir" id="bmFft"><span class="k">FFT</span> —</span>
+        <span class="chip" id="bmErr"><span class="k">max |Δ|</span> —</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot" id="bmOps"></canvas>
+          <div class="cap">Operation count. Both axes log. At N = 65 536 the ratio is about 4 000×.</div>
+        </div>
+        <div>
+          <canvas class="plot" id="bmSpec"></canvas>
+          <div class="cap">Both spectra, overplotted: thin mint FFT sitting exactly on thick red DFT. Every wiggle in the noise floor lines up, because the two agree to floating-point rounding.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <div class="ctl-lab"><span>Transform size N</span><span class="ctl-val" id="bmNV">1024</span></div>
+        <input type="range" id="bmSize" min="6" max="13" step="1" value="10">
+      </div>
+      <button class="btn" id="bmRun">Run both</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Why it is faster · radix-2 butterfly, N = 8</span>
+      <div class="chips"><span class="chip" id="btStage"><span class="k">stage</span> 1 of 3</span></div>
+    </div>
+    <canvas class="plot" id="btCv" style="height:260px"></canvas>
+    <div class="cap">An 8-point DFT is split into two 4-point DFTs, each split into two 2-point DFTs. log₂N stages, N/2 butterflies each. The trick is that e<sup>−j2πkn/N</sup> takes only N distinct values, so the naive version recomputes the same products over and over.</div>
+    <div class="controls">
+      <button class="btn" id="btPlay">Pause</button>
+      <div class="ctl" style="max-width:240px">
+        <div class="ctl-lab"><span>Highlight stage</span><span class="ctl-val" id="btSV">auto</span></div>
+        <input type="range" id="btS" min="0" max="3" step="1" value="0">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 07 BRICKWALL ========== -->
+<section id="brickwall">
+  <div class="sec-head">
+    <div class="sec-num"><i>07</i> · IDEAL vs REAL</div>
+    <h2>The brickwall filter cannot be built. Here is exactly why.</h2>
+    <p>Ask for a response that is 1 below cutoff and 0 above it, and the inverse transform hands you a sinc — which extends to ±∞ in time and is non-zero <em>before</em> t = 0. Infinite means unbuildable. Non-causal means it needs the future. So you truncate, and truncation has a price.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Truncate the sinc · pay in ripple</span>
+      <div class="chips">
+        <span class="chip" id="gbRip"><span class="k">passband ripple</span> —</span>
+        <span class="chip" id="gbAtt"><span class="k">stopband</span> —</span>
+        <span class="chip" id="gbTrans"><span class="k">transition</span> —</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot" id="gbImp"></canvas>
+          <div class="cap">Ideal sinc, greyed, running off both edges. Kept taps in colour.</div>
+        </div>
+        <div>
+          <canvas class="plot" id="gbMag"></canvas>
+          <div class="cap">Dashed white = the brickwall you asked for. Solid = what you get. Passband ripple is too small to see on a dB axis — read it off the chip above.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Window">
+        <button data-win="rect" aria-pressed="true">Rectangular</button>
+        <button data-win="hann" aria-pressed="false">Hann</button>
+        <button data-win="hamming" aria-pressed="false">Hamming</button>
+        <button data-win="blackman" aria-pressed="false">Blackman</button>
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Taps kept</span><span class="ctl-val" id="gbNV">31</span></div>
+        <input type="range" class="fir" id="gbN" min="7" max="201" step="2" value="31">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Cutoff (×Nyquist)</span><span class="ctl-val" id="gbFcV">0.25</span></div>
+        <input type="range" class="fir" id="gbFc" min="0.05" max="0.9" step="0.01" value="0.25">
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="keybox red">
+      <span class="lab">Gibbs phenomenon</span>
+      <p>Chop the sinc with a rectangular window and the overshoot at the edge settles at about <strong>9 % and refuses to shrink</strong>. Adding taps makes the ripple narrower, never shorter. That is not a bug in your design — it is what a discontinuity does.</p>
+    </div>
+    <div class="keybox">
+      <span class="lab">The bargain every filter designer makes</span>
+      <p>Taper the window and the sidelobes drop from −21 dB to −74 dB, but the transition band gets wider for the same tap count. <strong>Sharpness, stopband depth, tap count: pick two.</strong> That single trade is most of practical FIR design.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 08 LEAKAGE ========== -->
+<section id="leakage">
+  <div class="sec-head">
+    <div class="sec-num"><i>08</i> · IDEAL vs REAL</div>
+    <h2>Your spectrum analyser is lying, politely</h2>
+    <p>Textbook: a pure sine gives a single spectral line. Reality: one clean bin only when the sine completes a whole number of cycles inside your capture window. Move it half a bin off and the energy smears across the entire spectrum.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Slide the tone between bins</span>
+      <div class="chips">
+        <span class="chip" id="lkFrac"><span class="k">bin offset</span> 0.00</span>
+        <span class="chip" id="lkPeak"><span class="k">peak error</span> 0.00 dB</span>
+        <span class="chip" id="lkFloor"><span class="k">worst sidelobe</span> —</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot" id="lkTime"></canvas>
+          <div class="cap">Solid = the window the DFT actually sees, tiled end to end. Dashed = the real tone carrying on. The step where they part is the leakage source.</div>
+        </div>
+        <div>
+          <canvas class="plot" id="lkSpec"></canvas>
+          <div class="cap">Magnitude, dB. Every non-zero bin here is an artefact — the input is one pure tone.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Window function">
+        <button data-lw="rect" aria-pressed="true">No window</button>
+        <button data-lw="hann" aria-pressed="false">Hann</button>
+        <button data-lw="hamming" aria-pressed="false">Hamming</button>
+        <button data-lw="blackman" aria-pressed="false">Blackman</button>
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Tone frequency, in bins</span><span class="ctl-val" id="lkFV">8.00</span></div>
+        <input type="range" id="lkF" min="4" max="16" step="0.01" value="8">
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="keybox amber">
+      <span class="lab">Leakage and scalloping</span>
+      <p>Off-bin energy has nowhere legal to go, so it spreads — <strong>leakage</strong>. The peak also reads low, by nearly <strong>4 dB</strong> with no window, because the true peak falls between two bins — <strong>scalloping loss</strong>. Your amplitude measurement is wrong and the plot looks perfectly healthy.</p>
+    </div>
+    <div class="keybox">
+      <span class="lab">Windows are damage control, not a fix</span>
+      <p>A window fades the capture to zero at both ends so the tiled version has no jump. Leakage collapses; in exchange the main lobe widens, so two close tones merge. <strong>Dynamic range or resolution — same trade as §07</strong>, because it is the same mathematics.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 09 QUANTISATION ========== -->
+<section id="quant">
+  <div class="sec-head">
+    <div class="sec-num"><i>09</i> · IDEAL vs REAL</div>
+    <h2>Finite word length: where IIR bites back</h2>
+    <p>On paper your coefficients are real numbers. In an FPGA or a fixed-point DSP they are integers with a binary point. Rounding them moves the poles. For a high-Q filter the poles sit near the unit circle already, and there may not be a representable grid point left on the safe side.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Round the coefficients · watch the poles move</span>
+      <div class="chips">
+        <span class="chip" id="qzWord"><span class="k">format</span> —</span>
+        <span class="chip" id="qzShift"><span class="k">pole shift</span> —</span>
+        <span class="chip" id="qzStat">stable</span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="grid2">
+        <div>
+          <canvas class="plot tall" id="qzPz"></canvas>
+          <div class="cap">White ✕ = ideal pole, coloured ✕ = where rounding lands it, red line = |z| = 1. Grey dots in the zoom are every pole the coefficient grid can express: widely spaced vertically, finely spaced horizontally. That anisotropy is why low-frequency, high-Q poles are the dangerous ones.</div>
+        </div>
+        <div>
+          <canvas class="plot tall" id="qzMag"></canvas>
+          <div class="cap">Dashed = ideal. Solid = after rounding. Only the feedback coefficients are rounded here, since those are what place the poles — a real design scales the numerator separately.</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <div class="ctl-lab"><span>Fractional bits</span><span class="ctl-val" id="qzBV">10</span></div>
+        <input type="range" class="iir" id="qzB" min="2" max="20" step="1" value="10">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Resonance f₀</span><span class="ctl-val" id="qzFV">0.020</span></div>
+        <input type="range" class="iir" id="qzF" min="0.005" max="0.45" step="0.005" value="0.02">
+      </div>
+      <div class="ctl">
+        <div class="ctl-lab"><span>Q</span><span class="ctl-val" id="qzQV">30</span></div>
+        <input type="range" class="iir" id="qzQ" min="0.7" max="60" step="0.1" value="30">
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="keybox red">
+      <span class="lab">Low f₀ is the dangerous corner</span>
+      <p>Push f₀ down and the poles crowd against z = 1, where the coefficient grid is coarsest relative to what you need. Walk the bits down on this Q = 30, f₀ = 0.02 resonator: it detunes first, then at 6 fractional bits both poles land exactly on the circle and it oscillates forever on its own. Fix: cascade biquads instead of one high-order section, or move to a coupled-form / lattice structure whose grid is uniform.</p>
+    </div>
+    <div class="keybox">
+      <span class="lab">FIR just shrugs</span>
+      <p>Round FIR coefficients and the stopband gets shallower. That is the whole failure mode. There are no poles to displace, so no amount of rounding can make it unstable — which is why FIR wins wherever a filter must never, under any conditions, misbehave.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 10 ALIASING ========== -->
+<section id="alias">
+  <div class="sec-head">
+    <div class="sec-num"><i>10</i> · IDEAL vs REAL</div>
+    <h2>The failure that no filter downstream can undo</h2>
+    <p>Sample a tone above f<sub>s</sub>/2 and it does not disappear — it comes back wearing a disguise, at |f − k·f<sub>s</sub>|, indistinguishable from a real low-frequency signal. Once the ADC has folded it in, the information is gone.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Sweep the input past Nyquist</span>
+      <div class="chips">
+        <span class="chip" id="alIn"><span class="k">input</span> —</span>
+        <span class="chip" id="alOut"><span class="k">reconstructed</span> —</span>
+        <span class="chip" id="alFlag">below Nyquist</span>
+      </div>
+    </div>
+    <canvas class="plot" id="alCv" style="height:250px"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--dim)"></i>true continuous input</span>
+      <span><i style="background:var(--sig)"></i>samples taken</span>
+      <span><i style="background:var(--alert)"></i>what reconstruction gives back</span>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <div class="ctl-lab"><span>Input frequency (× f<sub>s</sub>)</span><span class="ctl-val" id="alFV">0.20</span></div>
+        <input type="range" id="alF" min="0.02" max="2.4" step="0.005" value="0.2">
+      </div>
+    </div>
+    <div class="cap">This is why an analog anti-alias filter in front of the converter is not optional, and why it cannot be replaced by any amount of DSP after the fact.</div>
+  </div>
+</section>
+
+<!-- ========== CHEAT SHEET ========== -->
+<section id="cheat">
+  <div class="sec-head">
+    <div class="sec-num">SUMMARY</div>
+    <h2>The short version</h2>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Filters</span></div>
+      <div class="panel-body">
+        <ul class="tick">
+          <li><b>FIR</b> — no feedback, finite h[n], always stable, linear phase available, many taps.</li>
+          <li><b>IIR</b> — feedback, infinite h[n], can be unstable, cheap for sharp responses, phase warps.</li>
+          <li><b>Analog</b> gives you IIR for the price of a capacitor. Analog FIR needs a real delay line, so it is rare and expensive.</li>
+          <li><b>Digital</b> gives you an exact delay for the price of a flip-flop, which makes FIR the default.</li>
+          <li><b>Choose FIR</b> when phase linearity matters, when the response must be reconfigurable, or when instability is unacceptable.</li>
+          <li><b>Choose IIR</b> when a sharp response has to fit in a tiny compute budget and phase is not critical.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Transforms</span></div>
+      <div class="panel-body">
+        <ul class="tick amber">
+          <li><b>Fourier transform</b> — continuous in, continuous out. A definition, not something you run.</li>
+          <li><b>DFT</b> — N samples in, N bins out. The computable one. Assumes your window repeats forever.</li>
+          <li><b>FFT</b> — an algorithm for the DFT. Identical output, O(N log N) instead of O(N²).</li>
+          <li><b>Leakage</b> happens when the tone is not an exact bin multiple. Windows trade it against resolution.</li>
+          <li><b>Bin spacing is f<sub>s</sub>/N.</b> Zero-padding interpolates the plot; it never adds resolution.</li>
+          <li><b>Alias first, ask later</b> — nothing after the ADC can separate a folded tone from a genuine one.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="mono" style="color:var(--dim)">Every plot on this page is computed live in the browser — real convolutions, a real radix-2 FFT, real pole solving. Nothing is a stock image.</div>
+  <div class="mono" style="margin-top:10px"><span style="color:var(--fir)">■</span> FIR / ideal-side quantities &nbsp;&nbsp; <span style="color:var(--iir)">■</span> IIR / feedback quantities &nbsp;&nbsp; <span style="color:var(--alert)">■</span> failure modes</div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+const CS = getComputedStyle(document.documentElement);
+const V = k => CS.getPropertyValue(k).trim();
+const COL = {
+  fir:V('--fir')||'#5fe3c0', iir:V('--iir')||'#ffb454', sig:V('--sig')||'#6ea8ff',
+  text:V('--text')||'#d7e3f1', dim:V('--dim')||'#7690ac', rule:V('--rule')||'#23364c',
+  soft:V('--rule-soft')||'#1a2a3c', alert:V('--alert')||'#ff6b6b', ideal:'#eaf2ff',
+  violet:V('--violet')||'#b48ef0'
+};
+const MONO = '"IBM Plex Mono",ui-monospace,Menlo,monospace';
+const REDRAW = [];
+const reg = fn => { REDRAW.push(fn); return fn; };
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============ plotting ============ */
+class Plot{
+  constructor(cv,o){
+    this.cv=cv; this.ctx=cv.getContext('2d');
+    this.o=Object.assign({xmin:0,xmax:1,ymin:0,ymax:1,pl:46,pr:14,pt:14,pb:26},o||{});
+    this.fit();
+  }
+  fit(){
+    const r=this.cv.getBoundingClientRect();
+    const d=Math.min(window.devicePixelRatio||1,2);
+    this.w=Math.max(20,Math.round(r.width))||300;
+    this.h=Math.max(20,Math.round(r.height))||200;
+    this.cv.width=Math.round(this.w*d); this.cv.height=Math.round(this.h*d);
+    this.ctx.setTransform(d,0,0,d,0,0);
+  }
+  set(o){Object.assign(this.o,o); return this;}
+  get iw(){return this.w-this.o.pl-this.o.pr;}
+  get ih(){return this.h-this.o.pt-this.o.pb;}
+  X(x){const o=this.o;return o.pl+(x-o.xmin)/(o.xmax-o.xmin)*this.iw;}
+  Y(y){const o=this.o;return o.pt+(o.ymax-y)/(o.ymax-o.ymin)*this.ih;}
+  clear(){this.fit();this.ctx.clearRect(0,0,this.w,this.h);return this;}
+  frame(){
+    const c=this.ctx,o=this.o;
+    c.strokeStyle=COL.rule;c.lineWidth=1;
+    c.strokeRect(o.pl+.5,o.pt+.5,this.iw-1,this.ih-1);
+    return this;
+  }
+  grid(xt,yt){
+    const c=this.ctx,o=this.o;
+    c.save();c.font='10px '+MONO;c.lineWidth=1;
+    (xt||[]).forEach(t=>{
+      const x=Math.round(this.X(t.v))+.5;
+      c.strokeStyle=t.hi?COL.rule:COL.soft;
+      c.beginPath();c.moveTo(x,o.pt);c.lineTo(x,o.pt+this.ih);c.stroke();
+      if(t.l!==undefined){c.fillStyle=COL.dim;c.textAlign='center';c.textBaseline='top';
+        c.fillText(t.l,x,o.pt+this.ih+6);}
+    });
+    (yt||[]).forEach(t=>{
+      const y=Math.round(this.Y(t.v))+.5;
+      c.strokeStyle=t.hi?COL.rule:COL.soft;
+      c.beginPath();c.moveTo(o.pl,y);c.lineTo(o.pl+this.iw,y);c.stroke();
+      if(t.l!==undefined){c.fillStyle=COL.dim;c.textAlign='right';c.textBaseline='middle';
+        c.fillText(t.l,o.pl-7,y);}
+    });
+    c.restore();return this;
+  }
+  clip(){const c=this.ctx,o=this.o;c.save();c.beginPath();
+    c.rect(o.pl,o.pt,this.iw,this.ih);c.clip();return this;}
+  unclip(){this.ctx.restore();return this;}
+  line(xs,ys,col,lw,dash){
+    const c=this.ctx;c.save();c.beginPath();
+    c.rect(this.o.pl,this.o.pt,this.iw,this.ih);c.clip();
+    c.strokeStyle=col;c.lineWidth=lw||1.6;c.lineJoin='round';
+    if(dash)c.setLineDash(dash);
+    c.beginPath();
+    let started=false;
+    for(let i=0;i<xs.length;i++){
+      const y=ys[i];
+      if(!isFinite(y)){started=false;continue;}
+      const px=this.X(xs[i]),py=this.Y(y);
+      if(!started){c.moveTo(px,py);started=true;}else c.lineTo(px,py);
+    }
+    c.stroke();c.restore();return this;
+  }
+  stem(xs,ys,col,base,dotR){
+    const c=this.ctx;c.save();c.beginPath();
+    c.rect(this.o.pl,this.o.pt,this.iw,this.ih);c.clip();
+    const b=this.Y(base===undefined?0:base);
+    c.strokeStyle=col;c.lineWidth=1.3;c.fillStyle=col;
+    const r=dotR===undefined?2:dotR;
+    for(let i=0;i<xs.length;i++){
+      if(!isFinite(ys[i]))continue;
+      const px=Math.round(this.X(xs[i]))+.5,py=this.Y(ys[i]);
+      c.beginPath();c.moveTo(px,b);c.lineTo(px,py);c.stroke();
+      const rr=(ys[i]===0)?Math.min(r,0.9):r;
+      if(rr>0){c.beginPath();c.arc(px,py,rr,0,6.284);c.fill();}
+    }
+    c.restore();return this;
+  }
+  hline(y,col,dash,lw){
+    const c=this.ctx;c.save();c.strokeStyle=col;c.lineWidth=lw||1;
+    if(dash)c.setLineDash(dash);
+    const py=Math.round(this.Y(y))+.5;
+    c.beginPath();c.moveTo(this.o.pl,py);c.lineTo(this.o.pl+this.iw,py);c.stroke();
+    c.restore();return this;
+  }
+  vline(x,col,dash,lw){
+    const c=this.ctx;c.save();c.strokeStyle=col;c.lineWidth=lw||1;
+    if(dash)c.setLineDash(dash);
+    const px=Math.round(this.X(x))+.5;
+    c.beginPath();c.moveTo(px,this.o.pt);c.lineTo(px,this.o.pt+this.ih);c.stroke();
+    c.restore();return this;
+  }
+  dot(x,y,r,col,fill){
+    const c=this.ctx;c.save();c.beginPath();c.arc(this.X(x),this.Y(y),r,0,6.284);
+    if(fill===false){c.strokeStyle=col;c.lineWidth=1.6;c.stroke();}
+    else{c.fillStyle=col;c.fill();}
+    c.restore();return this;
+  }
+  cross(x,y,r,col,lw){
+    const c=this.ctx,px=this.X(x),py=this.Y(y);
+    c.save();c.strokeStyle=col;c.lineWidth=lw||1.8;c.beginPath();
+    c.moveTo(px-r,py-r);c.lineTo(px+r,py+r);c.moveTo(px+r,py-r);c.lineTo(px-r,py+r);
+    c.stroke();c.restore();return this;
+  }
+  text(x,y,s,col,align,base,size,px){
+    const c=this.ctx;c.save();c.font=(size||10)+'px '+MONO;c.fillStyle=col;
+    c.textAlign=align||'left';c.textBaseline=base||'middle';
+    c.fillText(s, px?x:this.X(x), px?y:this.Y(y));c.restore();return this;
+  }
+  axlab(xl,yl){
+    if(xl)this.text(this.o.pl+this.iw/2,this.h-4,xl,COL.dim,'center','bottom',10,true);
+    if(yl)this.text(4,this.o.pt-6,yl,COL.dim,'left','middle',10,true);
+    return this;
+  }
+  band(x0,x1,col){
+    const c=this.ctx;c.save();c.fillStyle=col;
+    const a=this.X(x0),b=this.X(x1);
+    c.fillRect(Math.min(a,b),this.o.pt,Math.abs(b-a),this.ih);c.restore();return this;
+  }
+}
+const lin=(a,b,n)=>{const o=new Array(n);for(let i=0;i<n;i++)o[i]=a+(b-a)*i/(n-1);return o;};
+const dB=m=>20*Math.log10(Math.max(m,1e-12));
+const fmt=(v,d)=>v.toFixed(d===undefined?2:d);
+
+/* ============ DSP ============ */
+function lfilter(b,a,x){
+  const N=x.length,y=new Float64Array(N),a0=a[0];
+  for(let n=0;n<N;n++){
+    let acc=0;
+    for(let m=0;m<b.length;m++){if(n-m<0)break;acc+=b[m]*x[n-m];}
+    for(let m=1;m<a.length;m++){if(n-m<0)break;acc-=a[m]*y[n-m];}
+    y[n]=acc/a0;
+  }
+  return y;
+}
+function impz(b,a,N){const x=new Float64Array(N);x[0]=1;return lfilter(b,a,x);}
+function freqz(b,a,N){
+  const mag=new Float64Array(N),w=new Float64Array(N);
+  for(let k=0;k<N;k++){
+    const wk=Math.PI*k/(N-1);w[k]=wk;
+    let nr=0,ni=0,dr=0,di=0;
+    for(let m=0;m<b.length;m++){nr+=b[m]*Math.cos(wk*m);ni-=b[m]*Math.sin(wk*m);}
+    for(let m=0;m<a.length;m++){dr+=a[m]*Math.cos(wk*m);di-=a[m]*Math.sin(wk*m);}
+    const d=dr*dr+di*di;
+    const hr=(nr*dr+ni*di)/d, hi=(ni*dr-nr*di)/d;
+    mag[k]=Math.hypot(hr,hi);
+  }
+  return {w:w,mag:mag};
+}
+function fft(re,im){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit=n>>1;
+    for(;j&bit;bit>>=1)j^=bit;
+    j^=bit;
+    if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}
+  }
+  for(let len=2;len<=n;len<<=1){
+    const ang=-2*Math.PI/len, h=len>>1;
+    for(let i=0;i<n;i+=len){
+      for(let k=0;k<h;k++){
+        const wr=Math.cos(ang*k),wi=Math.sin(ang*k);
+        const p=i+k,q=p+h;
+        const vr=re[q]*wr-im[q]*wi, vi=re[q]*wi+im[q]*wr;
+        re[q]=re[p]-vr; im[q]=im[p]-vi;
+        re[p]+=vr; im[p]+=vi;
+      }
+    }
+  }
+}
+function dftNaive(xr,xi){
+  // Direct O(N^2) evaluation of the DFT sum. Twiddles come from a lookup
+  // table so the comparison measures the algorithm, not Math.cos().
+  const n=xr.length, re=new Float64Array(n), im=new Float64Array(n);
+  const ct=new Float64Array(n), st=new Float64Array(n), s=-2*Math.PI/n;
+  for(let m=0;m<n;m++){ct[m]=Math.cos(s*m);st[m]=Math.sin(s*m);}
+  for(let k=0;k<n;k++){
+    let sr=0,si=0;
+    for(let t=0;t<n;t++){
+      const m=(k*t)%n, c=ct[m], d=st[m];
+      sr+=xr[t]*c-xi[t]*d; si+=xr[t]*d+xi[t]*c;
+    }
+    re[k]=sr;im[k]=si;
+  }
+  return {re:re,im:im};
+}
+function window_(type,N,per){
+  // per=true gives the periodic (DFT) form; default is the symmetric (FIR) form
+  const w=new Float64Array(N);
+  for(let n=0;n<N;n++){
+    const r=per?n/N:(N>1?n/(N-1):0), t=2*Math.PI*r;
+    switch(type){
+      case 'hann': w[n]=0.5-0.5*Math.cos(t);break;
+      case 'hamming': w[n]=0.54-0.46*Math.cos(t);break;
+      case 'blackman': w[n]=0.42-0.5*Math.cos(t)+0.08*Math.cos(2*t);break;
+      default: w[n]=1;
+    }
+  }
+  return w;
+}
+const sinc=x=>Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x);
+function firLP(N,fc,wt){
+  const b=new Float64Array(N), w=window_(wt||'rect',N), M=(N-1)/2;
+  let s=0;
+  for(let n=0;n<N;n++){ b[n]=fc*sinc(fc*(n-M))*w[n]; s+=b[n]; }
+  if(Math.abs(s)>1e-12)for(let n=0;n<N;n++)b[n]/=s;
+  return b;
+}
+function biquadLP(f0,Q){
+  const w0=2*Math.PI*f0, cw=Math.cos(w0), al=Math.sin(w0)/(2*Q);
+  const a0=1+al;
+  return {b:[(1-cw)/2/a0,(1-cw)/a0,(1-cw)/2/a0], a:[1,(-2*cw)/a0,(1-al)/a0]};
+}
+function biquadBP(f0,Q){
+  const w0=2*Math.PI*f0, cw=Math.cos(w0), al=Math.sin(w0)/(2*Q);
+  const a0=1+al;
+  return {b:[al/a0,0,-al/a0], a:[1,(-2*cw)/a0,(1-al)/a0]};
+}
+function polesOf(a){ // a = [1, a1, a2]
+  const A1=a[1],A2=a[2],D=A1*A1-4*A2;
+  if(D<0){const im=Math.sqrt(-D)/2;return [{re:-A1/2,im:im},{re:-A1/2,im:-im}];}
+  const s=Math.sqrt(D);
+  return [{re:(-A1+s)/2,im:0},{re:(-A1-s)/2,im:0}];
+}
+const quant=(v,F)=>Math.round(v*Math.pow(2,F))/Math.pow(2,F);
+
+/* ============ resize ============ */
+let rz;
+const doRedraw=()=>REDRAW.forEach(f=>{try{f();}catch(e){}});
+window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(doRedraw,120)});
+
+/* ============ scrollspy ============ */
+(function(){
+  const links=[...document.querySelectorAll('#nav a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      if(e.isIntersecting){
+        links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));
+      }
+    });
+  },{rootMargin:'-45% 0px -50% 0px'});
+  secs.forEach(s=>io.observe(s));
+})();
+
+/* ============ HERO · impulse race ============ */
+(function(){
+  const cv=document.getElementById('heroCv'); if(!cv)return;
+  const P=new Plot(cv,{pl:52,pr:18,pt:20,pb:36,xmin:-2,xmax:120,ymin:-0.02,ymax:0.10});
+  const firChip=document.getElementById('heroFirChip'),
+        iirChip=document.getElementById('heroIirChip'),
+        nChip=document.getElementById('heroN'),
+        playB=document.getElementById('heroPlay'),
+        resB=document.getElementById('heroReset'),
+        aS=document.getElementById('heroA'), aV=document.getElementById('heroAV');
+  const NT=16, NMAX=120;
+  let ytop=0.10;
+  let alpha=0.93, n=0, playing=!RM, last=0, hF=[], hI=[];
+  function build(){
+    hF=[];hI=[];
+    for(let i=0;i<=NMAX;i++){
+      hF.push(i<NT?1/NT:0);
+      hI.push((1-alpha)*Math.pow(alpha,i));
+    }
+  }
+  function settleN(){ // samples until |h| < 1e-6
+    let k=0,v=1-alpha;
+    while(v>=1e-6&&k<100000){v*=alpha;k++;}
+    return k;
+  }
+  function draw(){
+    ytop=Math.max(0.10,(1-alpha)*1.22);
+    P.set({ymin:-0.02*ytop/0.10,ymax:ytop});
+    P.clear();
+    const st=ytop/5, yt=[];
+    for(let i=0;i<=5;i++)yt.push({v:st*i,l:(st*i).toFixed(2),hi:i===0});
+    const xt=[];for(let v=0;v<=120;v+=20)xt.push({v:v,l:String(v)});
+    P.grid(xt,yt); P.frame();
+    P.text(P.o.pl-44, P.o.pt-8,'h[n]',COL.dim,'left','middle',10,true);
+    P.text(P.w-18, P.h-8,'n',COL.dim,'right','bottom',10,true);
+    // input impulse
+    P.stem([0],[ytop*0.97],COL.dim,0,3);
+    P.text(1.5,ytop*0.97,'δ[n]',COL.dim,'left','middle',10);
+    const shown=Math.min(n,NMAX);
+    const xs=[],fy=[],iy=[];
+    for(let i=0;i<=shown;i++){xs.push(i);fy.push(hF[i]);iy.push(hI[i]);}
+    P.stem(xs,iy,COL.iir,0,2.2);
+    P.stem(xs,fy,COL.fir,0,2.2);
+    // FIR cutoff marker
+    if(n>=NT){
+      P.vline(NT-0.5,COL.fir,[3,4],1);
+      P.text(NT+1.5,ytop*0.86,'FIR stops here',COL.fir,'left','middle',10);
+    }
+    if(shown>=NMAX){
+      P.text(118,ytop*0.07,'IIR continues →',COL.iir,'right','middle',10);
+    }
+    nChip.innerHTML='<span class="k">n =</span> '+shown;
+    firChip.innerHTML='<span class="k">FIR</span> '+(shown>=NT?'0.000000  · done':hF[shown].toFixed(6));
+    iirChip.innerHTML='<span class="k">IIR</span> '+hI[shown].toExponential(2)+'  · ringing';
+  }
+  reg(draw);
+  function tick(t){
+    if(playing && t-last>34){ last=t; n++; if(n>NMAX+34) n=0; draw(); }
+    requestAnimationFrame(tick);
+  }
+  aS.addEventListener('input',()=>{
+    alpha=+aS.value; aV.textContent=alpha.toFixed(3);
+    build(); draw();
+    iirChip.title='reaches 1e-6 at n≈'+settleN();
+  });
+  playB.addEventListener('click',()=>{playing=!playing;playB.textContent=playing?'Pause':'Play';});
+  resB.addEventListener('click',()=>{n=0;draw();});
+  build(); if(RM){n=NMAX;playB.textContent='Play';}
+  draw(); requestAnimationFrame(tick);
+})();
+
+/* ============ 01 · impulse explorer ============ */
+(function(){
+  const ci=document.getElementById('expImp'), cm=document.getElementById('expMag');
+  if(!ci)return;
+  const PI_=new Plot(ci,{pl:52,pr:16,pt:16,pb:36});
+  const PM=new Plot(cm,{pl:52,pr:16,pt:16,pb:36,xmin:0,xmax:1,ymin:-80,ymax:12});
+  const p1=document.getElementById('expP1'),p1L=document.getElementById('expP1L'),p1V=document.getElementById('expP1V'),
+        p2=document.getElementById('expP2'),p2L=document.getElementById('expP2L'),p2V=document.getElementById('expP2V'),
+        cOrd=document.getElementById('expOrder'),cTail=document.getElementById('expTail');
+  const cfg={
+    ma:{fir:1,p1:{l:'Taps N',min:2,max:64,step:1,v:16,f:v=>String(v)},
+        p2:{l:'— unused',min:0,max:1,step:1,v:0,f:()=>'—',off:1}},
+    sinc:{fir:1,p1:{l:'Taps N',min:7,max:101,step:2,v:41,f:v=>String(v)},
+        p2:{l:'Cutoff ×Nyq',min:0.03,max:0.9,step:0.01,v:0.25,f:v=>v.toFixed(2)}},
+    one:{fir:0,p1:{l:'Feedback a',min:0.1,max:0.99,step:0.01,v:0.9,f:v=>v.toFixed(2)},
+        p2:{l:'— unused',min:0,max:1,step:1,v:0,f:()=>'—',off:1}},
+    bi:{fir:0,p1:{l:'Q',min:0.5,max:25,step:0.1,v:6,f:v=>v.toFixed(1)},
+        p2:{l:'Cutoff ×Nyq',min:0.02,max:0.85,step:0.01,v:0.15,f:v=>v.toFixed(2)}}
+  };
+  let cur='ma';
+  function coeffs(){
+    const c=cfg[cur];
+    if(cur==='ma'){const N=Math.round(c.p1.v);return{b:new Array(N).fill(1/N),a:[1]};}
+    if(cur==='sinc'){return{b:Array.from(firLP(Math.round(c.p1.v),c.p2.v,'hamming')),a:[1]};}
+    if(cur==='one'){const A=c.p1.v;return{b:[1-A],a:[1,-A]};}
+    const q=biquadLP(c.p2.v/2,c.p1.v);return{b:q.b,a:q.a};
+  }
+  function draw(){
+    const c=cfg[cur], col=c.fir?COL.fir:COL.iir, {b,a}=coeffs();
+    const NS=110, h=impz(b,a,NS+1);
+    let mx=0; for(let i=0;i<h.length;i++)mx=Math.max(mx,Math.abs(h[i]));
+    if(mx<1e-12)mx=1;
+    const top=mx*1.18, bot=Math.min(-0.12*mx, Math.min.apply(null,Array.from(h))*1.25);
+    PI_.set({xmin:-2,xmax:NS,ymin:bot,ymax:top}).clear();
+    const yt=[{v:0,l:'0',hi:true},{v:mx,l:mx.toPrecision(2)}];
+    if(bot<-0.02*mx)yt.push({v:bot*0.8,l:(bot*0.8).toPrecision(2)});
+    const xt=[];for(let v=0;v<=100;v+=20)xt.push({v:v,l:String(v)});
+    PI_.grid(xt,yt);PI_.frame();
+    PI_.stem(Array.from({length:h.length},(_,i)=>i),Array.from(h),col,0,1.9);
+    PI_.axlab(null,'h[n]');
+    PI_.axlab('n');
+    // settle
+    let settle=-1;
+    if(!c.fir){
+      const thr=mx*1e-4, hLong=impz(b,a,4000);
+      for(let i=hLong.length-1;i>=0;i--){if(Math.abs(hLong[i])>thr){settle=i+1;break;}}
+    }
+    if(c.fir){
+      const L=b.length;
+      PI_.vline(L-0.5,col,[3,4],1);
+      PI_.text(L+2,top*0.82,'zero from n='+L,col,'left','middle',10);
+      cTail.innerHTML='<span class="k">samples to settle</span> '+L+' exactly';
+    }else{
+      PI_.text(NS-2,top*0.82,(settle>NS?'still ringing at n='+NS:''),col,'right','middle',10);
+      cTail.innerHTML='<span class="k">samples to −80 dB</span> ≈'+(settle<0?'—':settle)+' (never 0)';
+    }
+    cOrd.innerHTML='<span class="k">mults/sample</span> '+(b.length+a.length-1);
+    // magnitude
+    const F=freqz(b,a,700);
+    PM.clear();
+    const ytm=[];for(let v=0;v>=-80;v-=20)ytm.push({v:v,l:String(v),hi:v===0});
+    const xtm=[{v:0,l:'0'},{v:0.25,l:'.25'},{v:0.5,l:'.5'},{v:0.75,l:'.75'},{v:1,l:'1'}];
+    PM.grid(xtm,ytm);PM.frame();
+    const xs=[],ys=[];
+    for(let i=0;i<F.mag.length;i++){xs.push(F.w[i]/Math.PI);ys.push(dB(F.mag[i]));}
+    PM.line(xs,ys,col,1.8);
+    PM.axlab(null,'dB');
+    PM.axlab('ω/π');
+  }
+  reg(draw);
+  function syncSliders(){
+    const c=cfg[cur];
+    [[p1,p1L,p1V,c.p1],[p2,p2L,p2V,c.p2]].forEach(([s,L,Vv,d])=>{
+      s.min=d.min;s.max=d.max;s.step=d.step;s.value=d.v;
+      L.textContent=d.l;Vv.textContent=d.f(d.v);
+      s.disabled=!!d.off; s.parentElement.style.opacity=d.off?0.35:1;
+      s.classList.toggle('fir',!!c.fir); s.classList.toggle('iir',!c.fir);
+    });
+  }
+  p1.addEventListener('input',()=>{cfg[cur].p1.v=+p1.value;p1V.textContent=cfg[cur].p1.f(+p1.value);draw();});
+  p2.addEventListener('input',()=>{cfg[cur].p2.v=+p2.value;p2V.textContent=cfg[cur].p2.f(+p2.value);draw();});
+  document.querySelectorAll('[data-exp]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('[data-exp]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      btn.setAttribute('aria-pressed','true');
+      cur=btn.dataset.exp; syncSliders(); draw();
+    });
+  });
+  syncSliders(); draw();
+})();
+
+/* ============ 03 · pole-zero ============ */
+(function(){
+  const cc=document.getElementById('pzCircle'), cr=document.getElementById('pzResp');
+  if(!cc)return;
+  const PC=new Plot(cc,{pl:40,pr:16,pt:14,pb:26,xmin:-1.35,xmax:1.35,ymin:-1.35,ymax:1.35});
+  const PR=new Plot(cr,{pl:52,pr:16,pt:16,pb:36});
+  const rS=document.getElementById('pzRad'),rV=document.getElementById('pzRV'),
+        aS=document.getElementById('pzAng'),aV=document.getElementById('pzAV'),
+        cR=document.getElementById('pzR'),cQ=document.getElementById('pzQ'),cSt=document.getElementById('pzStab');
+  function draw(){
+    const r=+rS.value, th=+aS.value*Math.PI;
+    rV.textContent=r.toFixed(3); aV.textContent=(+aS.value).toFixed(2)+' π';
+    // H(z) = 1 / (1 - 2r cos(th) z^-1 + r^2 z^-2), with zeros at z=+-1 for interest
+    const a=[1,-2*r*Math.cos(th),r*r];
+    const b=[1,0,-1]; // zeros at DC and Nyquist -> resonator
+    const unstable=r>=1;
+    // keep the unit circle circular whatever the panel width
+    PC.fit();
+    const asp=PC.iw/PC.ih;
+    PC.set({xmin:-1.35*asp,xmax:1.35*asp,ymin:-1.35,ymax:1.35});
+    PC.clear();
+    PC.grid([{v:0,l:'0',hi:true}],[{v:0,l:'0',hi:true},{v:1,l:'+1'},{v:-1,l:'−1'}]);
+    PC.frame();
+    // unit circle
+    const cx=[],cy=[];
+    for(let i=0;i<=360;i++){cx.push(Math.cos(i*Math.PI/180));cy.push(Math.sin(i*Math.PI/180));}
+    PC.line(cx,cy,unstable?COL.alert:COL.dim,1.4,[4,4]);
+    PC.text(0.72,0.78,'|z| = 1',unstable?COL.alert:COL.dim,'left','middle',10);
+    // zeros
+    PC.dot(1,0,5,COL.fir,false); PC.dot(-1,0,5,COL.fir,false);
+    // poles
+    const pc=unstable?COL.alert:COL.iir;
+    PC.cross(r*Math.cos(th),r*Math.sin(th),6,pc,2);
+    PC.cross(r*Math.cos(th),-r*Math.sin(th),6,pc,2);
+    // radius line
+    const cnv=PC.ctx;cnv.save();cnv.strokeStyle=pc;cnv.globalAlpha=.45;cnv.lineWidth=1;
+    cnv.beginPath();cnv.moveTo(PC.X(0),PC.Y(0));cnv.lineTo(PC.X(r*Math.cos(th)),PC.Y(r*Math.sin(th)));
+    cnv.stroke();cnv.restore();
+    PC.text(1.22,0.09,'Re',COL.dim,'left','middle',10);
+    PC.text(0.05,1.2,'Im',COL.dim,'left','middle',10);
+    // impulse response
+    const N=140, h=impz(b,a,N);
+    let mx=0;for(let i=0;i<N;i++)mx=Math.max(mx,Math.abs(h[i]));
+    mx=Math.max(mx,1e-9);
+    PR.set({xmin:-2,xmax:N,ymin:-mx*1.15,ymax:mx*1.15}).clear();
+    PR.grid([{v:0,l:'0'},{v:50,l:'50'},{v:100,l:'100'}],
+            [{v:0,l:'0',hi:true},{v:mx,l:mx.toPrecision(2)},{v:-mx,l:'−'+mx.toPrecision(2)}]);
+    PR.frame();
+    PR.stem(Array.from({length:N},(_,i)=>i),Array.from(h),pc,0,1.6);
+    PR.axlab('n');
+    if(unstable)PR.text(N-4,mx*0.9,'DIVERGING',COL.alert,'right','middle',11);
+    cR.innerHTML='<span class="k">|p| =</span> '+r.toFixed(3);
+    const Q = (r<1 && r>0 && th>1e-3) ? th/(2*(-Math.log(r))) : NaN;
+    cQ.innerHTML='<span class="k">Q ≈</span> '+(isFinite(Q)&&Q>0?Q.toFixed(1):'—');
+    cSt.textContent=unstable?'UNSTABLE — output diverges':'stable';
+    cSt.className='chip'+(unstable?' bad':'');
+  }
+  reg(draw);
+  rS.addEventListener('input',draw); aS.addEventListener('input',draw);
+  // drag the pole directly
+  let dragging=false;
+  function fromEvent(ev){
+    const b=cc.getBoundingClientRect();
+    const px=ev.clientX-b.left, py=ev.clientY-b.top;
+    const o=PC.o;
+    const x=o.xmin+(px-o.pl)/PC.iw*(o.xmax-o.xmin);
+    const y=o.ymax-(py-o.pt)/PC.ih*(o.ymax-o.ymin);
+    const r=Math.min(1.06,Math.hypot(x,y));
+    let th=Math.abs(Math.atan2(y,x))/Math.PI;
+    rS.value=String(r); aS.value=String(Math.min(1,th)); draw();
+  }
+  cc.addEventListener('pointerdown',e=>{dragging=true;cc.setPointerCapture(e.pointerId);fromEvent(e);e.preventDefault();});
+  cc.addEventListener('pointermove',e=>{if(dragging)fromEvent(e);});
+  cc.addEventListener('pointerup',()=>{dragging=false;});
+  cc.addEventListener('pointercancel',()=>{dragging=false;});
+  draw();
+})();
+
+/* ============ 04 · RC vs one-pole ============ */
+(function(){
+  const cv=document.getElementById('rcCv'); if(!cv)return;
+  const P=new Plot(cv,{pl:54,pr:18,pt:18,pb:36,ymin:-0.05,ymax:1.12});
+  const tS=document.getElementById('rcT'),tV=document.getElementById('rcTV'),
+        fS=document.getElementById('rcFs'),fV=document.getElementById('rcFsV'),
+        cT=document.getElementById('rcTau'),cA=document.getElementById('rcAlpha'),cF=document.getElementById('rcFc');
+  function draw(){
+    const tau=+tS.value, fs=+fS.value*1000; // tau in ms, fs in Hz
+    tV.textContent=tau.toFixed(2)+' ms'; fV.textContent=(+fS.value)+' kHz';
+    const T=1000/fs; // sample period in ms
+    const alpha=Math.exp(-T/tau);
+    const tmax=Math.max(5*tau, 6*T);
+    P.set({xmin:-tmax*0.02,xmax:tmax}).clear();
+    const xt=[];for(let i=0;i<=5;i++)xt.push({v:tmax*i/5,l:(tmax*i/5).toFixed(1)});
+    P.grid(xt,[{v:0,l:'0',hi:true},{v:0.5,l:'0.5'},{v:0.632,l:'0.632'},{v:1,l:'1.0',hi:true}]);
+    P.frame();
+    const xs=[],ys=[];
+    for(let i=0;i<=400;i++){const t=tmax*i/400;xs.push(t);ys.push(1-Math.exp(-t/tau));}
+    P.line(xs,ys,COL.ideal,1.6);
+    P.vline(tau,COL.dim,[3,4],1);
+    P.text(tau+tmax*0.012,0.20,'t = τ',COL.dim,'left','middle',10);
+    // digital
+    const ns=Math.floor(tmax/T)+1, dx=[],dy=[];
+    for(let n=0;n<ns;n++){dx.push(n*T);dy.push(1-Math.pow(alpha,n+1));}
+    // zero-order-hold staircase
+    const sx=[],sy=[];
+    for(let n=0;n<ns;n++){sx.push(n*T);sy.push(dy[n]);sx.push(Math.min((n+1)*T,tmax));sy.push(dy[n]);}
+    P.line(sx,sy,COL.iir,1.3);
+    if(ns<160)P.stem(dx,dy,COL.iir,0,2.4);
+    P.axlab(null,'V/Vin');
+    P.axlab('t (ms)');
+    cT.innerHTML='<span class="k">τ = RC</span> '+tau.toFixed(2)+' ms';
+    cA.innerHTML='<span class="k">a = e^(−T/RC)</span> '+alpha.toFixed(5);
+    cF.innerHTML='<span class="k">f−3dB</span> '+(1000/(2*Math.PI*tau)).toFixed(0)+' Hz';
+  }
+  reg(draw);
+  tS.addEventListener('input',draw); fS.addEventListener('input',draw);
+  draw();
+})();
+
+/* ============ 05 · Fourier family mini plots ============ */
+(function(){
+  function pair(id,drawT,drawF,labT,labF){
+    const cv=document.getElementById(id); if(!cv)return;
+    const A=new Plot(cv,{}), B=new Plot(cv,{});
+    function draw(){
+      A.fit(); A.ctx.clearRect(0,0,A.w,A.h);
+      B.w=A.w; B.h=A.h;
+      A.set({pl:10,pr:Math.round(A.w*0.585),pt:24,pb:18});
+      B.set({pl:Math.round(A.w*0.535),pr:10,pt:24,pb:18});
+      [[A,labT],[B,labF]].forEach(([P,lab])=>{
+        P.frame();
+        P.ctx.save();P.ctx.fillStyle=COL.dim;P.ctx.font='9.5px '+MONO;
+        P.ctx.textAlign='left';P.ctx.textBaseline='alphabetic';
+        P.ctx.fillText(lab,P.o.pl,P.o.pt-6);P.ctx.restore();
+      });
+      drawT(A); drawF(B);
+      // arrow between
+      const c=A.ctx, mx=(A.o.pl+A.iw+B.o.pl)/2, my=A.o.pt+A.ih/2;
+      c.save();c.strokeStyle=COL.dim;c.fillStyle=COL.dim;c.lineWidth=1.2;
+      c.beginPath();c.moveTo(mx-9,my);c.lineTo(mx+5,my);c.stroke();
+      c.beginPath();c.moveTo(mx+9,my);c.lineTo(mx+2,my-4);c.lineTo(mx+2,my+4);c.closePath();c.fill();
+      c.font='9px '+MONO;c.textAlign='center';c.textBaseline='bottom';
+      c.fillText('F',mx,my-5);c.restore();
+    }
+    reg(draw); draw();
+  }
+  const gauss=(x,s)=>Math.exp(-x*x/(2*s*s));
+  // 1. CFT
+  pair('famCFT',P=>{
+    P.set({xmin:-3,xmax:3,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    const x=lin(-3,3,220);P.line(x,x.map(v=>gauss(v,0.7)),COL.sig,1.8);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'t',COL.dim,'right','bottom',9,true);
+  },P=>{
+    P.set({xmin:-3,xmax:3,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    const x=lin(-3,3,220);P.line(x,x.map(v=>gauss(v,0.9)),COL.violet,1.8);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'f',COL.dim,'right','bottom',9,true);
+  },'continuous · aperiodic','continuous · aperiodic');
+  // 2. Fourier series
+  pair('famFS',P=>{
+    P.set({xmin:-3,xmax:3,ymin:-1.5,ymax:1.5});
+    P.hline(0,COL.soft);
+    const x=lin(-3,3,400);
+    P.line(x,x.map(v=>{let s=0;for(let k=1;k<=9;k+=2)s+=Math.sin(k*Math.PI*v)/k;return s*4/Math.PI;}),COL.sig,1.7);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'t',COL.dim,'right','bottom',9,true);
+  },P=>{
+    P.set({xmin:-5.6,xmax:5.6,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    const xs=[],ys=[];
+    for(let k=-5;k<=5;k++){if(k%2===0)continue;xs.push(k);ys.push(1/Math.abs(k));}
+    P.stem(xs,ys,COL.violet,0,2.2);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'k·f₀',COL.dim,'right','bottom',9,true);
+  },'continuous · periodic','discrete lines');
+  // 3. DTFT
+  pair('famDTFT',P=>{
+    P.set({xmin:-0.6,xmax:14,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    const xs=[],ys=[];for(let n=0;n<14;n++){xs.push(n);ys.push(Math.pow(0.78,n));}
+    P.stem(xs,ys,COL.sig,0,2.2);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'n',COL.dim,'right','bottom',9,true);
+  },P=>{
+    P.set({xmin:-2,xmax:2,ymin:-0.1,ymax:1.15});
+    P.hline(0,COL.soft);
+    const x=lin(-2,2,400);
+    P.line(x,x.map(v=>{const w=Math.PI*v;return 0.22/Math.hypot(1-0.78*Math.cos(w),0.78*Math.sin(w));}),COL.violet,1.7);
+    [-1,1].forEach(v=>P.vline(v,'rgba(118,144,172,0.35)',[2,3]));
+    P.text(0,-0.03,'one period',COL.dim,'center','top',9);
+  },'discrete · infinite','continuous · periodic');
+  // 4. DFT
+  pair('famDFT',P=>{
+    P.set({xmin:-8.6,xmax:16.6,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    for(let rep=-1;rep<=1;rep++){
+      const xs=[],ys=[];for(let n=0;n<8;n++){xs.push(n+rep*8);ys.push(0.35+0.6*Math.pow(Math.sin(n*0.55),2));}
+      P.stem(xs,ys,rep===0?COL.sig:'rgba(110,168,255,0.20)',0,rep===0?2.2:1.4);
+    }
+    P.vline(-0.5,'rgba(118,144,172,0.45)',[2,3]);P.vline(7.5,'rgba(118,144,172,0.45)',[2,3]);
+    P.text(3.5,-0.03,'your N samples',COL.dim,'center','top',9);
+  },P=>{
+    P.set({xmin:-0.6,xmax:8,ymin:-0.15,ymax:1.15});
+    P.hline(0,COL.soft);
+    const xs=[],ys=[];for(let k=0;k<8;k++){xs.push(k);ys.push(0.25+0.7*Math.abs(Math.cos(k*0.8)));}
+    P.stem(xs,ys,COL.violet,0,2.4);
+    P.text(P.o.pl+P.iw-4,P.o.pt+P.ih-9,'k = 0…N−1',COL.dim,'right','bottom',9,true);
+  },'discrete · finite','discrete · finite');
+})();
+
+/* ============ 06 · DFT vs FFT benchmark ============ */
+(function(){
+  const co=document.getElementById('bmOps'), cs=document.getElementById('bmSpec');
+  if(!co)return;
+  const PO=new Plot(co,{pl:56,pr:16,pt:16,pb:36,xmin:4,xmax:20,ymin:1,ymax:12});
+  const PS=new Plot(cs,{pl:52,pr:16,pt:16,pb:36,xmin:0,xmax:0.5,ymin:-60,ymax:45});
+  const sz=document.getElementById('bmSize'), szV=document.getElementById('bmNV'),
+        runB=document.getElementById('bmRun'),
+        cN=document.getElementById('bmN'),cD=document.getElementById('bmDft'),
+        cF=document.getElementById('bmFft'),cE=document.getElementById('bmErr');
+  let last=null;
+  function drawOps(){
+    const N=1<<(+sz.value);
+    PO.clear();
+    const xt=[],yt=[];
+    for(let e=4;e<=20;e+=4)xt.push({v:e,l:'2^'+e});
+    for(let e=2;e<=12;e+=2)yt.push({v:e,l:'1e'+e});
+    PO.grid(xt,yt);PO.frame();
+    const xs=[],y1=[],y2=[];
+    for(let e=4;e<=20;e+=0.25){const n=Math.pow(2,e);xs.push(e);
+      y1.push(Math.log10(n*n)); y2.push(Math.log10(n*Math.max(1,Math.log2(n))));}
+    PO.line(xs,y1,COL.alert,1.9);
+    PO.line(xs,y2,COL.fir,1.9);
+    PO.text(16.4,Math.log10(Math.pow(2,15.2)*Math.pow(2,15.2)),'DFT  N²',COL.alert,'left','middle',10.5);
+    PO.text(19.6,Math.log10(Math.pow(2,19.4)*19.4)+1.15,'FFT  N log N',COL.fir,'right','middle',10.5);
+    const e0=Math.log2(N);
+    PO.vline(e0,COL.dim,[3,4]);
+    PO.dot(e0,Math.log10(N*N),3.4,COL.alert);
+    PO.dot(e0,Math.log10(N*Math.log2(N)),3.4,COL.fir);
+    PO.axlab('N');
+    PO.axlab(null,'ops');
+  }
+  function drawSpec(){
+    PS.clear();
+    const yt=[];for(let v=40;v>=-60;v-=20)yt.push({v:v,l:String(v)});
+    PS.grid([{v:0,l:'0'},{v:0.125,l:'.125'},{v:0.25,l:'.25'},{v:0.375,l:'.375'},{v:0.5,l:'.5'}],yt);
+    PS.frame();
+    if(!last){PS.text(PS.w/2,PS.h/2,'press RUN BOTH',COL.dim,'center','middle',11,true);return;}
+    PS.line(last.f,last.dft,COL.alert,3.4);
+    PS.line(last.f,last.fft,COL.fir,1.3);
+    PS.axlab(null,'dB');
+    PS.axlab('f / fs');
+    PS.text(PS.o.pl+PS.iw-8,PS.o.pt+12,'red = DFT   ·   mint = FFT',COL.dim,'right','middle',9.5,true);
+  }
+  function draw(){drawOps();drawSpec();}
+  reg(draw);
+  function run(){
+    const N=1<<(+sz.value);
+    runB.disabled=true; runB.textContent='Running…';
+    setTimeout(()=>{
+      const xr=new Float64Array(N), xi=new Float64Array(N);
+      for(let n=0;n<N;n++){
+        xr[n]=Math.sin(2*Math.PI*0.07*n)+0.5*Math.sin(2*Math.PI*0.181*n+0.7)
+             +0.25*Math.sin(2*Math.PI*0.33*n)+0.02*(Math.random()*2-1);
+      }
+      const reps=Math.max(1,Math.min(60,Math.round(4e6/(N*N))));
+      let t0=performance.now(), D=null;
+      for(let r=0;r<reps;r++) D=dftNaive(xr,xi);
+      const tD=(performance.now()-t0)/reps;
+      const fr=new Float64Array(N), fi=new Float64Array(N);
+      const repsF=Math.max(reps,20);
+      t0=performance.now();
+      for(let r=0;r<repsF;r++){ fr.set(xr); fi.set(xi); fft(fr,fi); }
+      const tF=(performance.now()-t0)/repsF;
+      let err=0;
+      for(let k=0;k<N;k++) err=Math.max(err,Math.hypot(D.re[k]-fr[k],D.im[k]-fi[k]));
+      const half=N>>1, f=[],d=[],ff=[];
+      let peak=0; for(let k=0;k<half;k++)peak=Math.max(peak,Math.hypot(fr[k],fi[k]));
+      for(let k=0;k<half;k++){
+        f.push(k/N);
+        d.push(dB(Math.hypot(D.re[k],D.im[k])/peak*100));
+        ff.push(dB(Math.hypot(fr[k],fi[k])/peak*100));
+      }
+      last={f:f,dft:d,fft:ff};
+      cN.innerHTML='<span class="k">N</span> '+N;
+      cD.innerHTML='<span class="k">DFT</span> '+tD.toFixed(tD<1?3:1)+' ms';
+      cF.innerHTML='<span class="k">FFT</span> '+tF.toFixed(tF<1?3:1)+' ms  ·  '+(tD/Math.max(tF,1e-6)).toFixed(0)+'× faster';
+      cE.innerHTML='<span class="k">max |Δ|</span> '+err.toExponential(1)+'  (rounding only)';
+      draw();
+      runB.disabled=false; runB.textContent='Run both';
+    },30);
+  }
+  sz.addEventListener('input',()=>{szV.textContent=String(1<<(+sz.value));drawOps();});
+  runB.addEventListener('click',run);
+  draw(); run();
+})();
+
+/* ============ 06b · butterfly ============ */
+(function(){
+  const cv=document.getElementById('btCv'); if(!cv)return;
+  const P=new Plot(cv,{pl:52,pr:52,pt:24,pb:34,xmin:0,xmax:3,ymin:7.6,ymax:-0.6});
+  const sS=document.getElementById('btS'),sV=document.getElementById('btSV'),
+        pB=document.getElementById('btPlay'),chip=document.getElementById('btStage');
+  const N=8, brev=[0,4,2,6,1,5,3,7];
+  let stage=1, auto=!RM, t0=0;
+  function draw(){
+    P.clear();
+    const active=stage;
+    // column labels
+    for(let s=1;s<=3;s++){
+      P.text(s-0.5,-0.45,'stage '+s,s===active?COL.fir:COL.dim,'center','middle',10);
+    }
+    // edges
+    for(let s=1;s<=3;s++){
+      const len=1<<s, h=len>>1, on=(s===active);
+      const c=P.ctx;c.save();
+      c.strokeStyle=on?COL.fir:'rgba(118,144,172,0.38)'; c.lineWidth=on?1.7:1;
+      for(let i=0;i<N;i+=len)for(let k=0;k<h;k++){
+        const a=i+k,b=i+k+h;
+        [[a,a],[a,b],[b,a],[b,b]].forEach(([u,v])=>{
+          c.beginPath();c.moveTo(P.X(s-1),P.Y(u));c.lineTo(P.X(s),P.Y(v));c.stroke();
+        });
+      }
+      c.restore();
+      if(on){
+        for(let i=0;i<N;i+=len)for(let k=0;k<h;k++){
+          const b=i+k+h;
+          P.text(s-0.5,b+0.34,'W'+(k===0?'⁰':(k===1?'¹':(k===2?'²':'³'))),COL.fir,'center','middle',9.5);
+        }
+      }
+    }
+    // nodes
+    for(let s=0;s<=3;s++)for(let r=0;r<N;r++){
+      const on=(s===active||s===active-1);
+      P.dot(s,r,on?3.2:2.2,on?COL.fir:COL.dim);
+    }
+    // labels
+    for(let r=0;r<N;r++){
+      P.text(P.o.pl-10,P.Y(r),'x['+brev[r]+']',COL.dim,'right','middle',10,true);
+      P.text(P.o.pl+P.iw+10,P.Y(r),'X['+r+']',COL.text,'left','middle',10,true);
+    }
+    chip.innerHTML='<span class="k">stage</span> '+active+' of 3  ·  '+(N/2)+' butterflies';
+  }
+  reg(draw);
+  function loop(t){
+    if(auto && t-t0>1300){t0=t;stage=stage%3+1;draw();}
+    requestAnimationFrame(loop);
+  }
+  sS.addEventListener('input',()=>{
+    const v=+sS.value;
+    if(v===0){auto=true;sV.textContent='auto';}
+    else{auto=false;stage=v;sV.textContent=String(v);draw();}
+  });
+  pB.addEventListener('click',()=>{auto=!auto;pB.textContent=auto?'Pause':'Play';});
+  if(RM){auto=false;pB.textContent='Play';}
+  draw(); requestAnimationFrame(loop);
+})();
+
+/* ============ 07 · truncated sinc / Gibbs ============ */
+(function(){
+  const ci=document.getElementById('gbImp'), cm=document.getElementById('gbMag');
+  if(!ci)return;
+  const PI_=new Plot(ci,{pl:52,pr:16,pt:16,pb:36});
+  const PM=new Plot(cm,{pl:52,pr:16,pt:16,pb:36,xmin:0,xmax:1,ymin:-100,ymax:14});
+  const nS=document.getElementById('gbN'),nV=document.getElementById('gbNV'),
+        fS=document.getElementById('gbFc'),fV=document.getElementById('gbFcV'),
+        cR=document.getElementById('gbRip'),cA=document.getElementById('gbAtt'),cT=document.getElementById('gbTrans');
+  let wt='rect';
+  function metrics(mag,w){
+    const N=mag.length, wn=i=>w[i]/Math.PI;
+    let i6=N-1; for(let i=0;i<N;i++){if(mag[i]<0.5){i6=i;break;}}
+    let iMin=-1;
+    for(let i=i6+1;i<N-1;i++){if(mag[i]<=mag[i+1]&&mag[i]<=mag[i-1]){iMin=i;break;}}
+    if(iMin<0)iMin=Math.min(N-1,i6+Math.max(2,Math.round(0.03*N)));
+    let ds=0; for(let i=iMin;i<N;i++)ds=Math.max(ds,mag[i]);
+    ds=Math.max(ds,1e-9);
+    let iPass=i6;
+    for(let i=0;i<i6;i++){if(Math.abs(mag[i]-1)>1.06*ds){iPass=i;break;}}
+    let iStop=N-1;
+    for(let i=i6;i<N;i++){if(mag[i]<=ds){iStop=i;break;}}
+    let dp=0; for(let i=0;i<=iPass;i++)dp=Math.max(dp,Math.abs(mag[i]-1));
+    return {ripple:20*Math.log10(1+dp), stop:20*Math.log10(ds), trans:Math.max(0,wn(iStop)-wn(iPass))};
+  }
+  function draw(){
+    const N=Math.round(+nS.value)|1, fc=+fS.value, M=(N-1)/2;
+    nV.textContent=String(N); fV.textContent=fc.toFixed(2);
+    const w=window_(wt,N);
+    const span=M+Math.max(10,Math.round(M*0.45));
+    const peak=fc;
+    PI_.set({xmin:-span,xmax:span,ymin:-peak*0.42,ymax:peak*1.2}).clear();
+    const xt=[];for(let k=-2;k<=2;k++)xt.push({v:Math.round(span*k/2),l:String(Math.round(span*k/2))});
+    PI_.grid(xt,[{v:0,l:'0',hi:true},{v:peak,l:peak.toFixed(2)}]);
+    PI_.frame();
+    // full ideal sinc
+    const xs=[],ys=[];
+    for(let i=0;i<=1200;i++){const x=-span+2*span*i/1200;xs.push(x);ys.push(fc*sinc(fc*x));}
+    PI_.line(xs,ys,'rgba(234,242,255,0.30)',1.3);
+    // kept taps
+    const kx=[],ky=[];
+    for(let n=0;n<N;n++){const x=n-M;kx.push(x);ky.push(fc*sinc(fc*x)*w[n]);}
+    PI_.stem(kx,ky,COL.fir,0,N>90?0:1.8);
+    PI_.vline(-M-0.5,COL.fir,[3,4]);PI_.vline(M+0.5,COL.fir,[3,4]);
+    PI_.text(-span+span*0.04,-peak*0.28,'cut',COL.fir,'left','middle',10);
+    PI_.text(span-span*0.04,-peak*0.28,'cut',COL.fir,'right','middle',10);
+    PI_.axlab('n − M');
+    // magnitude
+    const b=firLP(N,fc,wt), F=freqz(b,[1],900);
+    PM.clear();
+    const yt=[];for(let v=0;v>=-100;v-=20)yt.push({v:v,l:String(v),hi:v===0});
+    PM.grid([{v:0,l:'0'},{v:0.25,l:'.25'},{v:0.5,l:'.5'},{v:0.75,l:'.75'},{v:1,l:'1'}],yt);
+    PM.frame();
+    PM.line([0,fc,fc,1],[0,0,-100,-100],COL.ideal,1.4,[5,4]);
+    const mx=[],my=[];
+    for(let i=0;i<F.mag.length;i++){mx.push(F.w[i]/Math.PI);my.push(dB(F.mag[i]));}
+    PM.line(mx,my,COL.fir,1.7);
+    PM.axlab(null,'dB');
+    PM.axlab('ω/π');
+    const m=metrics(F.mag,F.w);
+    cR.innerHTML='<span class="k">passband ripple</span> ±'+m.ripple.toFixed(2)+' dB';
+    cA.innerHTML='<span class="k">stopband</span> '+m.stop.toFixed(1)+' dB';
+    cT.innerHTML='<span class="k">transition</span> '+m.trans.toFixed(3)+' ×π';
+  }
+  reg(draw);
+  nS.addEventListener('input',draw); fS.addEventListener('input',draw);
+  document.querySelectorAll('[data-win]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('[data-win]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      btn.setAttribute('aria-pressed','true'); wt=btn.dataset.win; draw();
+    });
+  });
+  draw();
+})();
+
+/* ============ 08 · leakage ============ */
+(function(){
+  const ct=document.getElementById('lkTime'), cs=document.getElementById('lkSpec');
+  if(!ct)return;
+  const PT=new Plot(ct,{pl:46,pr:16,pt:16,pb:36,ymin:-1.35,ymax:1.35});
+  const PS=new Plot(cs,{pl:52,pr:16,pt:16,pb:36,ymin:-92,ymax:8});
+  const fS=document.getElementById('lkF'),fV=document.getElementById('lkFV'),
+        cFr=document.getElementById('lkFrac'),cPk=document.getElementById('lkPeak'),cFl=document.getElementById('lkFloor');
+  const N=64; let wt='rect';
+  function draw(){
+    const f=+fS.value; fV.textContent=f.toFixed(2);
+    const w=window_(wt,N,true);
+    const xw=new Float64Array(N);
+    for(let n=0;n<N;n++) xw[n]=Math.cos(2*Math.PI*f*n/N)*w[n];
+    // continuous versions, so the seam in the periodic extension is visible
+    const wc=t=>{const u=2*Math.PI*t/N;
+      if(wt==='hann')return 0.5-0.5*Math.cos(u);
+      if(wt==='hamming')return 0.54-0.46*Math.cos(u);
+      if(wt==='blackman')return 0.42-0.5*Math.cos(u)+0.08*Math.cos(2*u);
+      return 1;};
+    const g=t=>Math.cos(2*Math.PI*f*t/N)*wc(t);
+    const seam=Math.abs(g(0)-g(N-1e-7));
+    PT.set({xmin:-1,xmax:2*N+1}).clear();
+    PT.grid([{v:0,l:'0'},{v:N,l:String(N),hi:true},{v:2*N,l:String(2*N)}],
+            [{v:0,l:'0',hi:true},{v:1,l:'+1'},{v:-1,l:'−1'}]);
+    PT.frame();
+    // the real tone, carrying on past the capture
+    const ux=[],uy=[];
+    for(let i=0;i<=800;i++){const t=2*N*i/800;ux.push(t);uy.push(Math.cos(2*Math.PI*f*t/N));}
+    PT.line(ux,uy,'rgba(150,175,200,0.30)',1.1,[4,4]);
+    // what the DFT actually sees: the window, tiled
+    for(let rep=0;rep<2;rep++){
+      const px=[],py=[];
+      for(let i=0;i<=500;i++){const t=N*i/500;px.push(t+rep*N);py.push(g(Math.min(t,N-1e-7)));}
+      PT.line(px,py,rep?'rgba(110,168,255,0.45)':COL.sig,1.7);
+    }
+    PT.vline(N,COL.dim,[3,4]);
+    if(seam>0.04){
+      PT.dot(N,g(N-1e-7),3.4,COL.alert); PT.dot(N,g(0),3.4,COL.alert);
+      const c=PT.ctx;c.save();c.strokeStyle=COL.alert;c.lineWidth=1.6;
+      c.beginPath();c.moveTo(PT.X(N),PT.Y(g(N-1e-7)));c.lineTo(PT.X(N),PT.Y(g(0)));c.stroke();c.restore();
+    }
+    PT.text(N+2,-1.2,seam>0.04?('step of '+seam.toFixed(2)+' at the seam'):'no step at the seam',
+            seam>0.04?COL.alert:COL.fir,'left','middle',10);
+    PT.axlab('n');
+    // spectrum
+    const re=new Float64Array(N), im=new Float64Array(N);
+    re.set(xw); fft(re,im);
+    const half=N>>1, mag=[];
+    for(let k=0;k<=half;k++)mag.push(Math.hypot(re[k],im[k]));
+    let CG=0;for(let n=0;n<N;n++)CG+=w[n];CG/=N;
+    const ideal=N/2*CG;
+    let pk=0,pki=0;for(let k=0;k<=half;k++)if(mag[k]>pk){pk=mag[k];pki=k;}
+    PS.set({xmin:-0.6,xmax:half+0.6}).clear();
+    const xt=[];for(let k=0;k<=half;k+=8)xt.push({v:k,l:String(k)});
+    const yt=[];for(let v=0;v>=-90;v-=20)yt.push({v:v,l:String(v),hi:v===0});
+    PS.grid(xt,yt);PS.frame();
+    const sx=[],sy=[];
+    for(let k=0;k<=half;k++){sx.push(k);sy.push(dB(mag[k]/ideal));}
+    PS.stem(sx,sy,COL.violet,-92,1.9);
+    PS.vline(f,COL.fir,[3,4]);
+    PS.text(f+0.5,4,'true tone',COL.fir,'left','middle',10);
+    let sl=-999;
+    for(let k=0;k<=half;k++){if(Math.abs(k-f)>=3)sl=Math.max(sl,dB(mag[k]/pk));}
+    PS.axlab(null,'dB');
+    PS.axlab('bin k');
+    const off=Math.abs(f-Math.round(f));
+    cFr.innerHTML='<span class="k">bin offset</span> '+off.toFixed(2)+(off<0.005?'  · exact':'');
+    cPk.innerHTML='<span class="k">peak error</span> '+dB(pk/ideal).toFixed(2)+' dB';
+    cFl.innerHTML='<span class="k">worst sidelobe</span> '+(sl<-100?'none — one clean bin':sl.toFixed(1)+' dB');
+  }
+  reg(draw);
+  fS.addEventListener('input',draw);
+  document.querySelectorAll('[data-lw]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('[data-lw]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      btn.setAttribute('aria-pressed','true'); wt=btn.dataset.lw; draw();
+    });
+  });
+  draw();
+})();
+
+/* ============ 09 · coefficient quantisation ============ */
+(function(){
+  const cp=document.getElementById('qzPz'), cm=document.getElementById('qzMag');
+  if(!cp)return;
+  const PP=new Plot(cp,{pl:40,pr:16,pt:14,pb:26});
+  const PM=new Plot(cm,{pl:52,pr:16,pt:16,pb:36,xmin:0,xmax:0.5,ymin:-70,ymax:14});
+  const bS=document.getElementById('qzB'),bV=document.getElementById('qzBV'),
+        fS=document.getElementById('qzF'),fV=document.getElementById('qzFV'),
+        qS=document.getElementById('qzQ'),qV=document.getElementById('qzQV'),
+        cW=document.getElementById('qzWord'),cSh=document.getElementById('qzShift'),cSt=document.getElementById('qzStat');
+  function draw(){
+    const F=Math.round(+bS.value), f0=+fS.value, Q=+qS.value;
+    bV.textContent=String(F); fV.textContent=f0.toFixed(3); qV.textContent=Q.toFixed(1);
+    const d=biquadBP(f0,Q);
+    const aq=[1,quant(d.a[1],F),quant(d.a[2],F)];
+    const pi=polesOf(d.a), pq=polesOf(aq);
+    const rq=Math.hypot(pq[0].re,pq[0].im), unstable=rq>=1;
+    PP.fit();
+    const asp=PP.iw/PP.ih;
+    PP.set({xmin:-1.25*asp,xmax:1.25*asp,ymin:-1.25,ymax:1.25}).clear();
+    PP.grid([{v:0,l:'0',hi:true}],[{v:0,l:'0',hi:true},{v:1,l:'+1'},{v:-1,l:'−1'}]);
+    PP.frame();
+    const cx=[],cy=[];
+    for(let i=0;i<=360;i++){cx.push(Math.cos(i*Math.PI/180));cy.push(Math.sin(i*Math.PI/180));}
+    PP.line(cx,cy,unstable?COL.alert:COL.dim,1.4,[4,4]);
+    pi.forEach(p=>PP.cross(p.re,p.im,6,COL.ideal,1.5));
+    pq.forEach(p=>PP.cross(p.re,p.im,6,unstable?COL.alert:COL.iir,2.2));
+    const shift=Math.hypot(pq[0].re-pi[0].re,pq[0].im-pi[0].im);
+    // ---- magnified inset: the lattice of poles the coefficient grid can actually reach ----
+    (function inset(){
+      const ip=pi[0].im>=0?pi[0]:pi[1], qp=pq[0].im>=0?pq[0]:pq[1];
+      const step=Math.pow(2,-F), imv=Math.max(Math.abs(ip.im),1e-4);
+      const dRe=step/2, dIm=step/(2*imv);
+      const spanX=dRe*4.5, spanY=dIm*4.5;
+      const bw=Math.min(148,PP.iw*0.36), bh=Math.min(bw,PP.ih*0.46);
+      const bx=PP.o.pl+10, by=PP.o.pt+10;
+      const IX=re=>bx+bw/2+(re-ip.re)/spanX*(bw/2);
+      const IY=im=>by+bh/2-(im-ip.im)/spanY*(bh/2);
+      const c=PP.ctx; c.save();
+      c.fillStyle='rgba(10,17,25,0.94)'; c.strokeStyle=COL.rule; c.lineWidth=1;
+      c.fillRect(bx,by,bw,bh); c.strokeRect(bx+.5,by+.5,bw,bh);
+      c.beginPath(); c.rect(bx,by,bw,bh); c.clip();
+      // reachable poles near this one
+      const qa1=quant(d.a[1],F), qa2=quant(d.a[2],F);
+      c.fillStyle='rgba(140,168,196,0.55)';
+      for(let k=-9;k<=9;k++)for(let j=-9;j<=9;j++){
+        const A1=qa1+k*step, A2=qa2+j*step, D=A1*A1-4*A2;
+        if(D>=0)continue;
+        const rr=-A1/2, ii=Math.sqrt(-D)/2;
+        c.fillRect(IX(rr)-1,IY(ii)-1,2,2);
+      }
+      // unit circle arc
+      const th0=Math.atan2(ip.im,ip.re);
+      c.strokeStyle='rgba(255,107,107,0.75)';c.lineWidth=1.2;c.beginPath();
+      for(let t=-0.9;t<=0.9;t+=0.002){
+        const a=th0+t, X=IX(Math.cos(a)), Y=IY(Math.sin(a));
+        if(t<=-0.4+1e-9)c.moveTo(X,Y);else c.lineTo(X,Y);
+      }
+      c.stroke();
+      const mark=(x,y,col,lw)=>{c.strokeStyle=col;c.lineWidth=lw;c.beginPath();
+        c.moveTo(x-5,y-5);c.lineTo(x+5,y+5);c.moveTo(x+5,y-5);c.lineTo(x-5,y+5);c.stroke();};
+      mark(IX(ip.re),IY(ip.im),COL.ideal,1.4);
+      mark(IX(qp.re),IY(qp.im),unstable?COL.alert:COL.iir,2.2);
+      c.restore();
+      c.save();c.font='9.5px '+MONO;c.fillStyle=COL.dim;c.textAlign='left';c.textBaseline='top';
+      c.fillText('zoom — reachable poles',bx,by+bh+4);
+      c.restore();
+      // leader from the inset to the real location
+      c.save();c.strokeStyle='rgba(118,144,172,0.5)';c.lineWidth=1;c.setLineDash([3,3]);
+      c.beginPath();c.moveTo(bx+bw,by+bh/2);c.lineTo(PP.X(ip.re),PP.Y(ip.im));c.stroke();c.restore();
+    })();
+    // magnitude
+    PM.clear();
+    const yt=[];for(let v=10;v>=-70;v-=20)yt.push({v:v,l:String(v),hi:v===0});
+    PM.grid([{v:0,l:'0'},{v:0.125,l:'.125'},{v:0.25,l:'.25'},{v:0.375,l:'.375'},{v:0.5,l:'.5'}],yt);
+    PM.frame();
+    const Fi=freqz(d.b,d.a,2600), Fq=freqz(d.b,aq,2600);
+    const xs=[],y1=[],y2=[];
+    for(let i=0;i<Fi.mag.length;i++){
+      xs.push(Fi.w[i]/(2*Math.PI)); y1.push(dB(Fi.mag[i])); y2.push(dB(Fq.mag[i]));
+    }
+    PM.line(xs,y1,COL.ideal,1.4,[5,4]);
+    PM.line(xs,y2,unstable?COL.alert:COL.iir,1.8);
+    PM.vline(f0,COL.dim,[3,4]);
+    PM.axlab(null,'dB');
+    PM.axlab('f / fs');
+    cW.innerHTML='<span class="k">feedback coeffs</span> Q3.'+F+'  ·  '+(F+3)+'-bit word';
+    cSh.innerHTML='<span class="k">pole shift</span> '+(shift<1e-9?'0':shift.toExponential(1));
+    cSt.textContent=unstable?('UNSTABLE — |p| = '+rq.toFixed(4)):('stable — |p| = '+rq.toFixed(4));
+    cSt.className='chip'+(unstable?' bad':'');
+  }
+  reg(draw);
+  [bS,fS,qS].forEach(s=>s.addEventListener('input',draw));
+  draw();
+})();
+
+/* ============ 10 · aliasing ============ */
+(function(){
+  const cv=document.getElementById('alCv'); if(!cv)return;
+  const P=new Plot(cv,{pl:46,pr:18,pt:20,pb:36,ymin:-1.35,ymax:1.35});
+  const fS=document.getElementById('alF'),fV=document.getElementById('alFV'),
+        cI=document.getElementById('alIn'),cO=document.getElementById('alOut'),cFl=document.getElementById('alFlag');
+  const NS=13;
+  function draw(){
+    const f=+fS.value; fV.textContent=f.toFixed(3);
+    const fa=Math.abs(f-Math.round(f));
+    const aliased=f>0.5;
+    P.set({xmin:-0.4,xmax:NS-1+0.4}).clear();
+    const xt=[];for(let n=0;n<NS;n+=3)xt.push({v:n,l:String(n)});
+    P.grid(xt,[{v:0,l:'0',hi:true},{v:1,l:'+1'},{v:-1,l:'−1'}]);
+    P.frame();
+    // true continuous
+    const tx=[],ty=[];
+    for(let i=0;i<=2400;i++){const t=(NS-1)*i/2400;tx.push(t);ty.push(Math.cos(2*Math.PI*f*t));}
+    P.line(tx,ty,'rgba(150,175,200,0.9)',4.5);
+    // reconstruction
+    const rx=[],ry=[];
+    for(let i=0;i<=1200;i++){const t=(NS-1)*i/1200;rx.push(t);ry.push(Math.cos(2*Math.PI*fa*t));}
+    P.line(rx,ry,COL.alert,1.6);
+    // samples
+    const sx=[],sy=[];
+    for(let n=0;n<NS;n++){sx.push(n);sy.push(Math.cos(2*Math.PI*f*n));}
+    P.stem(sx,sy,COL.sig,0,3.2);
+    P.axlab('sample index n');
+    cI.innerHTML='<span class="k">input</span> '+f.toFixed(3)+' × fs';
+    cO.innerHTML='<span class="k">reconstructed</span> '+fa.toFixed(3)+' × fs';
+    if(aliased){cFl.textContent='ALIASED — folded to '+fa.toFixed(3)+' fs';cFl.className='chip bad';}
+    else{cFl.textContent='below Nyquist — recoverable';cFl.className='chip fir';}
+  }
+  reg(draw);
+  fS.addEventListener('input',draw);
+  draw();
+})();
+
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(doRedraw,60));
+window.addEventListener('load',()=>setTimeout(doRedraw,80));
+})();
+</script>
+</body>
+</html>

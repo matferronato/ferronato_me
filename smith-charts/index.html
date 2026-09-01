@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMITH·BENCH — impedance, lines & matching</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ground: cold ink, not pure black */
+  --bg:#0a0f16; --bg2:#0e141d; --panel:#121a25; --panel2:#16202c;
+  --line:#1e2b3a; --line2:#2a3d52;
+  --ink:#d5e0ec; --ink2:#93a6bb; --ink3:#61748a;
+  /* semantic pair borrowed from printed Smith charts */
+  --z:#e0604c;      /* impedance grid, series motion */
+  --y:#37b6cc;      /* admittance grid, shunt motion */
+  --trace:#c2e94b;  /* signal trace */
+  --mark:#ffb020;   /* markers, cursor */
+  --good:#4ade80; --bad:#f8716a;
+  --sans:"IBM Plex Sans Condensed",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 70% -10%, #16222f 0%, transparent 60%),
+    var(--bg);
+  color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:.01em}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* ---------- bezel / header ---------- */
+.bezel{
+  display:flex;gap:22px;align-items:center;flex-wrap:wrap;
+  padding:10px 18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#131c27,#0d141d);
+  position:sticky;top:0;z-index:20;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.brand .mark{
+  font-family:var(--mono);font-size:26px;font-weight:600;color:var(--bg);
+  width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+  background:conic-gradient(from 200deg,var(--z),var(--mark),var(--trace),var(--y),var(--z));
+}
+.brand h1{font-size:19px;letter-spacing:.14em;text-transform:uppercase}
+.brand p{margin:0;font-size:12px;color:var(--ink3);letter-spacing:.04em}
+.globals{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3)}
+.field input,.field select{
+  background:var(--bg);border:1px solid var(--line2);border-radius:4px;
+  padding:5px 8px;font-family:var(--mono);font-size:13px;width:var(--w,96px);
+}
+.field input:hover,.field select:hover{border-color:#3d566f}
+.field.wide input,.field.wide select{--w:150px}
+.field.sm input{--w:70px}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--bg2);padding:0 12px;overflow-x:auto}
+.tab{
+  background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;
+  padding:10px 16px;color:var(--ink3);font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;
+}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--mark);border-bottom-color:var(--mark)}
+
+/* ---------- layout ---------- */
+main{padding:16px;max-width:1560px;margin:0 auto}
+.view{display:none}
+.view.on{display:block}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.split.wide{grid-template-columns:minmax(0,1fr) 330px}
+@media(max-width:980px){.split,.split.wide{grid-template-columns:minmax(0,1fr)}}
+.rail{display:flex;flex-direction:column;gap:14px}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.card > h2{
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);
+  padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+}
+.card .body{padding:12px}
+.card .body + .body{border-top:1px solid var(--line)}
+.hint{font-size:12.5px;color:var(--ink3);margin:8px 0 0}
+
+.chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
+canvas{display:block;width:100%;touch-action:none}
+#smith{cursor:crosshair}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  background:var(--bg);border:1px solid var(--line2);border-radius:999px;
+  padding:4px 11px;font-size:12px;cursor:pointer;color:var(--ink2);
+}
+.chip:hover{border-color:var(--mark);color:var(--ink)}
+.chip.z{border-left:3px solid var(--z)}
+.chip.y{border-left:3px solid var(--y)}
+.chip.t{border-left:3px solid var(--trace)}
+.btn{
+  background:var(--panel2);border:1px solid var(--line2);border-radius:5px;
+  padding:6px 12px;font-size:13px;cursor:pointer;
+}
+.btn:hover{border-color:var(--mark);color:var(--mark)}
+.btn.primary{background:var(--mark);border-color:var(--mark);color:#1a1206;font-weight:600}
+.btn.primary:hover{filter:brightness(1.1);color:#1a1206}
+.btn.ghost{background:none}
+.btn.tiny{padding:2px 7px;font-size:12px;line-height:1.3}
+
+label.check{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--ink2);cursor:pointer}
+label.check input{accent-color:var(--mark)}
+input[type=range]{width:100%;accent-color:var(--mark)}
+
+/* ---------- cascade ---------- */
+.cascade{display:flex;flex-direction:column;gap:6px}
+.el{
+  display:grid;grid-template-columns:12px 1fr 78px 34px auto;gap:7px;align-items:center;
+  background:var(--bg);border:1px solid var(--line);border-left-width:3px;border-radius:5px;padding:6px 8px;
+}
+.el.series{border-left-color:var(--z)}
+.el.shunt{border-left-color:var(--y)}
+.el.dist{border-left-color:var(--trace)}
+.el.hot{border-color:var(--mark);background:#141d29}
+.el .grip{color:var(--ink3);font-family:var(--mono);font-size:11px}
+.el .nm{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.el input{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:3px 6px;font-family:var(--mono);font-size:12.5px;width:100%}
+.el .unit{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+.el .acts{display:flex;gap:3px}
+.el .acts button{background:none;border:0;color:var(--ink3);cursor:pointer;padding:2px 4px;font-size:13px;line-height:1}
+.el .acts button:hover{color:var(--mark)}
+.el .sub{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--ink3);font-family:var(--mono)}
+.empty{color:var(--ink3);font-size:13px;padding:10px;text-align:center;border:1px dashed var(--line2);border-radius:6px}
+
+/* ---------- readouts ---------- */
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;background:var(--line)}
+.readout div{background:var(--panel);padding:8px 11px}
+.readout .k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3)}
+.readout .v{font-family:var(--mono);font-size:17px;font-weight:500;color:var(--ink);white-space:nowrap}
+.readout .v small{font-size:11px;color:var(--ink3);font-weight:400}
+.v.ok{color:var(--good)} .v.warn{color:var(--mark)} .v.bad{color:var(--bad)}
+
+table.tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+table.tbl th{text-align:left;font-family:var(--sans);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);font-weight:500;padding:5px 8px;border-bottom:1px solid var(--line)}
+table.tbl td{padding:5px 8px;border-bottom:1px solid var(--line)}
+table.tbl tr:hover td{background:var(--panel2)}
+.pill{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:3px}
+.pill.pass{background:rgba(74,222,128,.14);color:var(--good)}
+.pill.fail{background:rgba(248,113,106,.16);color:var(--bad)}
+
+details.learn{border:1px solid var(--line);border-radius:7px;margin-bottom:8px;background:var(--panel)}
+details.learn > summary{padding:10px 13px;cursor:pointer;font-weight:600;font-size:14.5px;list-style:none;display:flex;gap:10px;align-items:baseline}
+details.learn > summary::-webkit-details-marker{display:none}
+details.learn > summary::before{content:"▸";color:var(--mark);font-size:12px}
+details.learn[open] > summary::before{content:"▾"}
+details.learn .body{padding:0 14px 13px 33px;color:var(--ink2);font-size:14px}
+details.learn .body p{margin:.5em 0}
+details.learn code,.mono{font-family:var(--mono);font-size:.92em;color:var(--trace)}
+.key{color:var(--mark);font-weight:600}
+.zc{color:var(--z)} .yc{color:var(--y)}
+footer.foot{padding:14px 18px;color:var(--ink3);font-size:12px;border-top:1px solid var(--line);margin-top:20px}
+/* shared state strip under the tabs */
+.statusbar{display:flex;flex-wrap:wrap;background:#0d141d;border-bottom:1px solid var(--line)}
+.statusbar .s{padding:6px 13px;border-right:1px solid var(--line);display:flex;gap:8px;align-items:baseline;
+  max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statusbar .s.link{cursor:pointer}
+.statusbar .s.link:hover{background:var(--panel2)}
+.statusbar .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.statusbar .v{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media(max-width:760px){.duo{grid-template-columns:1fr}}
+.cap{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);
+  padding:1px 2px 7px;display:flex;justify-content:space-between;gap:8px}
+.cap b{color:var(--ink2);font-weight:500;letter-spacing:0;text-transform:none;font-family:var(--mono);font-size:11.5px}
+.interp{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--mark);
+  border-radius:6px;padding:10px 13px;font-size:14px;color:var(--ink2)}
+.interp b{color:var(--ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.grp td{background:var(--panel2);color:var(--ink2);font-family:var(--sans);font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="bezel">
+  <div class="brand">
+    <span class="mark">Γ</span>
+    <div><h1>Smith·Bench</h1><p>impedance · transmission lines · matching</p></div>
+  </div>
+  <div class="globals">
+    <div class="field sm"><label for="gf">Freq</label><input id="gf" type="number" value="1" step="0.1" min="0.001"></div>
+    <div class="field sm"><label for="gfu">Unit</label><select id="gfu"><option value="1e6">MHz</option><option value="1e9" selected>GHz</option><option value="1e3">kHz</option></select></div>
+    <div class="field sm"><label for="gz0">Z₀ (Ω)</label><input id="gz0" type="number" value="50" step="1" min="1"></div>
+    <div class="field wide"><label for="lmode">Load model</label>
+      <select id="lmode">
+        <option value="fixed">Fixed Z at f</option>
+        <option value="srlc">Series R–L–C</option>
+        <option value="prlc">Parallel R–L–C</option>
+      </select>
+    </div>
+    <div class="field sm"><label id="lab1" for="la">R (Ω)</label><input id="la" type="number" value="25" step="1"></div>
+    <div class="field sm"><label id="lab2" for="lb">X (Ω)</label><input id="lb" type="number" value="-30" step="1"></div>
+    <div class="field sm" id="lcWrap" style="display:none"><label id="lab3" for="lc">C (pF)</label><input id="lc" type="number" value="0" step="0.1"></div>
+    <div class="field wide"><label for="preset">Load preset</label><select id="preset"></select></div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-bench" aria-selected="true" data-view="bench">Bench</button>
+  <button class="tab" role="tab" id="tab-line" aria-selected="false" data-view="line">Line &amp; waves</button>
+  <button class="tab" role="tab" id="tab-sweep" aria-selected="false" data-view="sweep">Frequency</button>
+  <button class="tab" role="tab" id="tab-learn" aria-selected="false" data-view="learn">Learn &amp; drill</button>
+  <button class="tab" role="tab" id="tab-check" aria-selected="false" data-view="check">Numerics</button>
+</nav>
+<div class="statusbar" id="statusbar"></div>
+
+<main>
+
+<!-- ============ BENCH ============ -->
+<section class="view on" id="view-bench">
+  <div class="split">
+    <div>
+      <div class="chartwrap"><canvas id="smith" height="640"></canvas></div>
+      <div class="card" style="margin-top:14px"><div class="readout" id="ro"></div></div>
+      <p class="hint" id="hoverHint">Drag anywhere to move the load (◆). Grab the input marker (●) instead and the load is back-solved through the network, so the input lands exactly where you put it.</p>
+    </div>
+
+    <div class="rail">
+      <div class="card">
+        <h2>Network <span id="netCount" class="mono" style="color:var(--ink3)"></span></h2>
+        <div class="body">
+          <div class="chips" id="addChips"></div>
+          <div class="cascade" id="cascade" style="margin-top:10px"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost tiny" id="clearNet">Clear network</button>
+            <span class="hint" style="margin:0">Top = source side.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Matching solver</h2>
+        <div class="body">
+          <div class="row">
+            <button class="btn" data-solve="l">L-network</button>
+            <button class="btn" data-solve="stub">Single stub</button>
+            <button class="btn" data-solve="qw">λ/4 transformer</button>
+          </div>
+          <div id="solutions" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Chart overlays</h2>
+        <div class="body">
+          <label class="check"><input type="checkbox" id="ovZ" checked> <span class="zc">Impedance grid</span> — series parts slide along these</label>
+          <label class="check"><input type="checkbox" id="ovY"> <span class="yc">Admittance grid</span> — shunt parts slide along these</label>
+          <label class="check"><input type="checkbox" id="ovSWR"> Constant-VSWR circle through the input</label>
+          <label class="check"><input type="checkbox" id="ovQ"> Constant-Q arcs (Q = <span class="mono">|x|/r</span>)</label>
+          <div class="row" style="margin-top:6px">
+            <div class="field sm"><label for="qVal">Q</label><input id="qVal" type="number" value="3" step="0.5" min="0.2"></div>
+            <label class="check"><input type="checkbox" id="ovLambda" checked> Wavelength ruler</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LINE ============ -->
+<section class="view" id="view-line">
+  <div class="split wide">
+    <div>
+      <div class="chartwrap">
+        <div class="cap"><span>Voltage along the line</span><b id="waveCap"></b></div>
+        <canvas id="wave" height="380"></canvas>
+        <div class="legend">
+          <span><i style="background:#e0604c"></i>forward wave, travelling toward the load</span>
+          <span><i style="background:#37b6cc"></i>reflected wave, travelling back</span>
+          <span><i style="background:#c2e94b"></i>their sum — what a probe measures</span>
+        </div>
+      </div>
+      <div class="duo">
+        <div class="chartwrap"><div class="cap"><span>Where you are on the chart</span><b id="capG"></b></div>
+          <canvas id="smithLine" height="320"></canvas></div>
+        <div class="chartwrap"><div class="cap"><span>The same thing as phasors</span><b id="capP"></b></div>
+          <canvas id="phasor" height="320"></canvas></div>
+      </div>
+      <div class="interp" id="interp"></div>
+      <div class="chartwrap" style="margin-top:14px">
+        <div class="cap"><span>Impedance looking toward the load</span><b id="capZ"></b></div>
+        <canvas id="zline" height="250"></canvas></div>
+    </div>
+    <div class="rail">
+      <div class="card">
+        <h2>Line under test</h2>
+        <div class="body">
+          <div class="field" style="--w:100%"><label for="lsrc">Which line</label><select id="lsrc"></select></div>
+          <div class="row" style="margin-top:9px">
+            <div class="field sm"><label for="lz0">Z₀ line</label><input id="lz0" type="number" value="50" step="1"></div>
+            <div class="field sm"><label for="lloss">Loss dB/λ</label><input id="lloss" type="number" value="0" step="0.05" min="0"></div>
+          </div>
+          <div class="field" style="margin-top:10px;--w:100%"><label for="llen">Line length: <span class="mono" id="llenV">1.00 λ</span></label>
+            <input id="llen" type="range" min="0.05" max="2" step="0.005" value="1"></div>
+          <div class="field" style="margin-top:6px;--w:100%"><label for="lpos">Probe, measured from the load: <span class="mono" id="lposV">0.00 λ</span></label>
+            <input id="lpos" type="range" min="0" max="1" step="0.002" value="0.125"></div>
+          <div class="row" style="margin-top:9px">
+            <button class="btn" id="walk">▶ Walk toward the source</button>
+            <button class="btn ghost tiny" id="toMax">jump to next V max</button>
+          </div>
+          <div class="row" style="margin-top:9px">
+            <label class="check"><input type="checkbox" id="anim" checked> Animate ωt</label>
+            <label class="check"><input type="checkbox" id="lock" checked> Freeze phasors on the forward wave</label>
+            <label class="check"><input type="checkbox" id="showI"> Show current</label>
+            <label class="check"><input type="checkbox" id="showEnv" checked> Envelope</label>
+          </div>
+        </div>
+      </div>
+      <div class="card"><h2>At the probe</h2><div class="readout" id="lro"></div></div>
+      <div class="card"><div class="body" style="font-size:13.5px;color:var(--ink2)">
+        <p style="margin:0">Both charts take input: drag the <b>◆</b> to change what terminates this
+        line, or grab the <b>●</b> and slide it round the locus to move the probe.</p>
+        <p style="margin:8px 0 0">The probe plane is also a point on the Bench chart. Pick one of the
+        network's lines above and it shows up there as a violet marker walking along that element's arc,
+        draggable from either side.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SWEEP ============ -->
+<section class="view" id="view-sweep">
+  <div class="split wide">
+    <div>
+      <div class="chartwrap"><canvas id="sweepPlot" height="400"></canvas></div>
+      <div class="card" style="margin-top:14px"><div class="readout" id="sro"></div></div>
+    </div>
+    <div class="rail">
+      <div class="card">
+        <h2>Sweep setup</h2>
+        <div class="body">
+          <div class="row">
+            <div class="field sm"><label for="f1">Start</label><input id="f1" type="number" value="0.5" step="0.1"></div>
+            <div class="field sm"><label for="f2">Stop</label><input id="f2" type="number" value="2" step="0.1"></div>
+            <div class="field sm"><label for="npts">Points</label><input id="npts" type="number" value="401" step="50" min="21"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="field sm"><label for="rlTarget">RL goal dB</label><input id="rlTarget" type="number" value="10" step="1"></div>
+            <label class="check"><input type="checkbox" id="swVSWR"> Plot VSWR</label>
+          </div>
+          <div class="field" style="--w:100%;margin-top:9px"><label for="fmark">Marker: <span class="mono" id="fmarkV"></span></label>
+            <input id="fmark" type="range" min="0" max="1" step="0.001" value="0.5"></div>
+          <div class="row" style="margin-top:7px">
+            <button class="btn tiny" id="setF0">Set f₀ to the marker</button>
+            <span class="hint" style="margin:0">or click the plot</span>
+          </div>
+          <p class="hint" id="sweepWarn"></p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Band locus</h2>
+        <div class="body" style="padding:8px"><canvas id="smithSweep" height="330"></canvas></div>
+        <div class="body"><p class="hint" style="margin:0">Drag the amber point to move the load until the whole band sits where you want it, or drag the violet one to slide the marker along the trace.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LEARN ============ -->
+<section class="view" id="view-learn">
+  <div class="split">
+    <div id="learnCards"></div>
+    <div class="rail">
+      <div class="card">
+        <h2>Stub-match drill</h2>
+        <div class="body" style="padding:8px"><canvas id="smithGame" height="330"></canvas></div>
+        <div class="body">
+          <p class="hint" style="margin:0 0 8px" id="gameLoad"></p>
+          <p class="hint" style="margin:-4px 0 8px">Drag the ◆ on the chart to pick your own load.</p>
+          <div class="field" style="--w:100%"><label for="gd">Line before stub: <span class="mono" id="gdV"></span></label><input id="gd" type="range" min="0" max="0.5" step="0.002" value="0.1"></div>
+          <div class="field" style="--w:100%;margin-top:6px"><label for="gl">Stub length: <span class="mono" id="glV"></span></label><input id="gl" type="range" min="0.001" max="0.5" step="0.002" value="0.1"></div>
+          <div class="row" style="margin-top:8px">
+            <div class="field sm"><label for="gtype">Stub end</label><select id="gtype"><option value="ss">Shorted</option><option value="so">Open</option></select></div>
+            <button class="btn" id="gNew">New load</button>
+            <button class="btn ghost" id="gSolve">Reveal</button>
+            <button class="btn ghost" id="gSend">Send to bench</button>
+          </div>
+          <div class="readout" id="gro" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHECK ============ -->
+<section class="view" id="view-check">
+  <div class="card">
+    <h2>Self-test — closed-form cases vs. this engine</h2>
+    <div class="body">
+      <p class="hint" style="margin:0 0 10px">Every number below is recomputed in your browser at load time. <code>rf_reference.py</code> ships the same cases so you can diff the two engines.</p>
+      <table class="tbl" id="testTable"><thead><tr><th>Case</th><th>Expected</th><th>Computed</th><th>Error</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">Lossless-by-default TEM model. Lumped parts are ideal (no parasitics, no self-resonance). Line loss is entered per wavelength and applied as a uniform α.</footer>
+</main>
+
+<script>
+"use strict";
+//#CORE_START ---------------------------------------------------------------
+/* Complex arithmetic — plain {re,im} objects, no allocation games. */
+const C = {
+  c:(re,im=0)=>({re,im}),
+  add:(a,b)=>({re:a.re+b.re, im:a.im+b.im}),
+  sub:(a,b)=>({re:a.re-b.re, im:a.im-b.im}),
+  mul:(a,b)=>({re:a.re*b.re-a.im*b.im, im:a.re*b.im+a.im*b.re}),
+  div:(a,b)=>{const d=b.re*b.re+b.im*b.im||1e-300;
+    return {re:(a.re*b.re+a.im*b.im)/d, im:(a.im*b.re-a.re*b.im)/d};},
+  inv:(a)=>{const d=a.re*a.re+a.im*a.im||1e-300; return {re:a.re/d, im:-a.im/d};},
+  scale:(a,k)=>({re:a.re*k, im:a.im*k}),
+  abs:(a)=>Math.hypot(a.re,a.im),
+  arg:(a)=>Math.atan2(a.im,a.re),
+  exp:(a)=>{const e=Math.exp(a.re); return {re:e*Math.cos(a.im), im:e*Math.sin(a.im)};},
+  tanh:(a)=>{ // (e^2z - 1)/(e^2z + 1)
+    const e=C.exp(C.scale(a,2));
+    return C.div(C.sub(e,C.c(1,0)), C.add(e,C.c(1,0)));
+  },
+  par:(a,b)=>C.div(C.mul(a,b), C.add(a,b)),
+  isFin:(a)=>Number.isFinite(a.re)&&Number.isFinite(a.im),
+};
+const c0 = 299792458;
+const DB_NP = 20/Math.LN10;   // dB per neper
+const BIG = 1e12;   // stand-in for an open circuit
+
+/* ---- reflection coefficient / basic figures of merit ---- */
+const gammaOf = (Z,Z0)=> C.div(C.sub(Z,C.c(Z0,0)), C.add(Z,C.c(Z0,0)));
+const zOfGamma = (G,Z0)=> C.scale(C.div(C.add(C.c(1,0),G), C.sub(C.c(1,0),G)), Z0);
+const vswrOf = (g)=> g>=0.999999 ? Infinity : (1+g)/(1-g);
+const rlOf   = (g)=> g<=1e-12 ? Infinity : -20*Math.log10(Math.min(g,1));
+const mismatchLoss = (g)=> -10*Math.log10(Math.max(1-g*g,1e-12));
+
+/* ---- element library ------------------------------------------------------
+   t : type code            kind : 'series' | 'shunt' | 'dist'
+   Value semantics: L in nH, C in pF, R in Ω, line/stub length in λ at the
+   reference frequency f0 (physical length is frozen, so βl scales with f).  */
+const LIB = {
+  sL:{name:'Series L', kind:'series', unit:'nH',  def:5,    step:.1},
+  sC:{name:'Series C', kind:'series', unit:'pF',  def:2,    step:.1},
+  sR:{name:'Series R', kind:'series', unit:'Ω',   def:10,   step:1},
+  pL:{name:'Shunt L',  kind:'shunt',  unit:'nH',  def:5,    step:.1},
+  pC:{name:'Shunt C',  kind:'shunt',  unit:'pF',  def:2,    step:.1},
+  pR:{name:'Shunt R',  kind:'shunt',  unit:'Ω',   def:200,  step:1},
+  tl:{name:'Line',     kind:'dist',   unit:'λ',   def:.25,  step:.005, hasZ0:true},
+  so:{name:'Open stub',kind:'shunt',  unit:'λ',   def:.125, step:.005, hasZ0:true, dist:true},
+  ss:{name:'Short stub',kind:'shunt', unit:'λ',   def:.125, step:.005, hasZ0:true, dist:true},
+};
+const mkEl = (t)=>({t, v:LIB[t].def, z0:50, id:Math.random().toString(36).slice(2,8)});
+
+/* Immittance contributed by a lumped element at angular frequency w. */
+function lumpZ(t,v,w){
+  switch(t){
+    case 'sR': case 'pR': return C.c(v,0);
+    case 'sL': case 'pL': return C.c(0, w*v*1e-9);
+    case 'sC': case 'pC': return C.c(0, -1/Math.max(w*v*1e-12,1e-300));
+  }
+}
+/* Input impedance of a length of line terminated in ZL.
+   len is in wavelengths at f0; alpha is dB per wavelength.            */
+function lineZin(ZL, Z0l, lenLam, f, f0, alphaDbLam){
+  const theta = 2*Math.PI*lenLam*(f/f0);          // βl
+  const np    = (alphaDbLam||0)*lenLam/DB_NP;  // total nepers
+  const t  = C.tanh(C.c(np, theta));
+  const z0 = C.c(Z0l,0);
+  const num = C.add(ZL, C.mul(z0,t));
+  const den = C.add(z0, C.mul(ZL,t));
+  return C.mul(z0, C.div(num,den));
+}
+const stubZ = (open, Z0s, lenLam, f, f0, a)=>
+  lineZin(open ? C.c(BIG,0) : C.c(0,0), Z0s, lenLam, f, f0, a);
+
+/* One element, applied to the impedance seen on its load side. */
+function applyEl(el, Z, f, f0){
+  const w = 2*Math.PI*f, L = LIB[el.t];
+  if(L.kind==='series') return C.add(Z, lumpZ(el.t, el.v, w));
+  if(el.t==='tl')       return lineZin(Z, el.z0, el.v, f, f0, el.loss||0);
+  // shunt
+  const Zs = L.dist ? stubZ(el.t==='so', el.z0, el.v, f, f0, el.loss||0)
+                    : lumpZ(el.t, el.v, w);
+  return C.par(Z, Zs);
+}
+/* Whole cascade: net[0] is nearest the source, so fold from the load up. */
+function cascadeZ(net, ZL, f, f0){
+  let Z = ZL;
+  for(let i=net.length-1;i>=0;i--) Z = applyEl(net[i], Z, f, f0);
+  return Z;
+}
+/* Inverse of applyEl: given what you see looking in, strip the element off.
+   Every element here is exactly invertible — a line just runs negative length. */
+function unapplyEl(el, Z, f, f0){
+  const w=2*Math.PI*f, L=LIB[el.t];
+  if(L.kind==='series') return C.sub(Z, lumpZ(el.t, el.v, w));
+  if(el.t==='tl')       return lineZin(Z, el.z0, -el.v, f, f0, el.loss||0);
+  const Zs = L.dist ? stubZ(el.t==='so', el.z0, el.v, f, f0, el.loss||0)
+                    : lumpZ(el.t, el.v, w);
+  return C.inv(C.sub(C.inv(Z), C.inv(Zs)));
+}
+/* Load that would produce this input impedance through the given network. */
+function uncascadeZ(net, Zin, f, f0){
+  let Z=Zin;
+  for(let i=0;i<net.length;i++) Z=unapplyEl(net[i], Z, f, f0);
+  return Z;
+}
+/* Trajectory of one element, sampled 0→100 %.  Series parts interpolate
+   reactance, shunt parts interpolate susceptance, lines interpolate length —
+   which is exactly the arc the part traces on the chart.               */
+function elPath(el, Z, f, f0, N=64){
+  const w=2*Math.PI*f, L=LIB[el.t], out=[];
+  let target=null;
+  if(L.kind==='series') target = lumpZ(el.t, el.v, w);
+  else if(el.t!=='tl')  target = C.inv(L.dist ? stubZ(el.t==='so', el.z0, el.v, f, f0, el.loss||0)
+                                              : lumpZ(el.t, el.v, w));
+  for(let i=0;i<=N;i++){
+    const t=i/N;
+    if(el.t==='tl') out.push(lineZin(Z, el.z0, el.v*t, f, f0, el.loss||0));
+    else if(L.kind==='series') out.push(C.add(Z, C.scale(target,t)));
+    else out.push(C.inv(C.add(C.inv(Z), C.scale(target,t))));
+  }
+  return out;
+}
+/* Load model → impedance at f. */
+function loadZ(m, f){
+  const w=2*Math.PI*f;
+  if(m.mode==='fixed') return C.c(m.a, m.b);
+  const zl = m.b>0 ? C.c(0,w*m.b*1e-9) : null;
+  const zc = m.c>0 ? C.c(0,-1/(w*m.c*1e-12)) : null;
+  if(m.mode==='srlc'){
+    let Z=C.c(m.a,0); if(zl) Z=C.add(Z,zl); if(zc) Z=C.add(Z,zc); return Z;
+  }
+  let Y=C.c(1/Math.max(m.a,1e-9),0);
+  if(zl) Y=C.add(Y,C.inv(zl)); if(zc) Y=C.add(Y,C.inv(zc));
+  return C.inv(Y);
+}
+
+/* ---- matching solvers ---------------------------------------------------- */
+const xToPart = (X,f)=> X>=0 ? {t:'sL', v:X/(2*Math.PI*f)*1e9} : {t:'sC', v:-1/(2*Math.PI*f*X)*1e12};
+const bToPart = (B,f)=> B>=0 ? {t:'pC', v:B/(2*Math.PI*f)*1e12} : {t:'pL', v:-1/(2*Math.PI*f*B)*1e9};
+
+/* Two-element L-networks. Up to four answers. net order = source→load. */
+function solveL(ZL, Z0, f){
+  const out=[];
+  const R=ZL.re, X=ZL.im, Y=C.inv(ZL), G=Y.re, Bl=Y.im;
+  // shunt at the load, then series toward the source
+  if(G>0 && G<=1/Z0+1e-15){
+    const root=Math.sqrt(Math.max(G/Z0-G*G,0));
+    for(const s of [1,-1]){
+      const B=s*root-Bl;
+      const Zafter=C.inv(C.add(Y,C.c(0,B)));
+      const Xs=-Zafter.im;
+      const p1=xToPart(Xs,f), p2=bToPart(B,f);
+      out.push({label:`${LIB[p1.t].name} + ${LIB[p2.t].name}`, net:[
+        {...mkEl(p1.t), v:p1.v}, {...mkEl(p2.t), v:p2.v}]});
+    }
+  }
+  // series at the load, then shunt toward the source
+  if(R>0 && R<=Z0+1e-12){
+    const root=Math.sqrt(Math.max(R*Z0-R*R,0));
+    for(const s of [1,-1]){
+      const Xs=s*root-X;
+      const Yafter=C.inv(C.c(R, X+Xs));
+      const B=-Yafter.im;
+      const p1=bToPart(B,f), p2=xToPart(Xs,f);
+      out.push({label:`${LIB[p1.t].name} + ${LIB[p2.t].name}`, net:[
+        {...mkEl(p1.t), v:p1.v}, {...mkEl(p2.t), v:p2.v}]});
+    }
+  }
+  return out.filter(s=>s.net.every(e=>Number.isFinite(e.v)&&e.v>1e-6&&e.v<1e7));
+}
+/* Shunt single-stub: scan the line for Re{Y}=Y0, then cancel the susceptance. */
+function solveStub(ZL, Z0, f, open=false){
+  const res=[], N=2000, Y0=1/Z0;
+  const gAt=(d)=>C.inv(lineZin(ZL,Z0,d,f,f,0)).re - Y0;
+  let prev=gAt(0);
+  for(let i=1;i<=N;i++){
+    const d=0.5*i/N, cur=gAt(d);
+    if(prev===0 || prev*cur<0){
+      let lo=0.5*(i-1)/N, hi=d;
+      for(let k=0;k<60;k++){const mid=(lo+hi)/2; (gAt(lo)*gAt(mid)<=0)?hi=mid:lo=mid;}
+      const dd=(lo+hi)/2;
+      const B=C.inv(lineZin(ZL,Z0,dd,f,f,0)).im;      // to be cancelled
+      // stub susceptance needed = -B ; open: B=Y0 tan(θ), short: B=-Y0 cot(θ)
+      let l = open ? Math.atan2(-B,Y0)/(2*Math.PI) : Math.atan2(-Y0,-B)/(2*Math.PI);
+      if(l<0) l+=0.5; if(l<1e-4) l+=0.5;
+      res.push({d:dd, l});
+    }
+    prev=cur;
+  }
+  return res.slice(0,2);
+}
+/* Quarter-wave: walk to the nearest purely real point, then transform. */
+function solveQW(ZL, Z0, f){
+  const N=4000; let prev=lineZin(ZL,Z0,0,f,f,0).im, best=[];
+  for(let i=1;i<=N;i++){
+    const d=0.5*i/N, cur=lineZin(ZL,Z0,d,f,f,0).im;
+    if(prev===0||prev*cur<0){
+      let lo=0.5*(i-1)/N, hi=d;
+      const im=(x)=>lineZin(ZL,Z0,x,f,f,0).im;
+      for(let k=0;k<60;k++){const mid=(lo+hi)/2; (im(lo)*im(mid)<=0)?hi=mid:lo=mid;}
+      const dd=(lo+hi)/2, R=lineZin(ZL,Z0,dd,f,f,0).re;
+      if(R>0) best.push({d:dd, Zq:Math.sqrt(Z0*R), R});
+    }
+    prev=cur;
+  }
+  return best.slice(0,2);
+}
+/* ---- second engine: ABCD (chain) matrices, used to cross-check the folding
+   code above. M = [A B; C D] written source -> load, so
+   Zin = (A·ZL + B)/(C·ZL + D) and S-parameters follow directly.        */
+function abcdOf(el,f,f0){
+  const w=2*Math.PI*f, L=LIB[el.t], I=C.c(1,0), O=C.c(0,0);
+  if(L.kind==='series') return [I, lumpZ(el.t,el.v,w), O, I];
+  if(el.t==='tl'){
+    const g=C.c((el.loss||0)*el.v/DB_NP, 2*Math.PI*el.v*(f/f0));
+    const ep=C.exp(g), en=C.exp(C.scale(g,-1));
+    const ch=C.scale(C.add(ep,en),.5), sh=C.scale(C.sub(ep,en),.5);
+    return [ch, C.scale(sh,el.z0), C.scale(sh,1/el.z0), ch];
+  }
+  const Zs = L.dist ? stubZ(el.t==='so', el.z0, el.v, f, f0, el.loss||0)
+                    : lumpZ(el.t, el.v, w);
+  return [I, O, C.inv(Zs), I];
+}
+const abcdMul=(m,n)=>[
+  C.add(C.mul(m[0],n[0]),C.mul(m[1],n[2])), C.add(C.mul(m[0],n[1]),C.mul(m[1],n[3])),
+  C.add(C.mul(m[2],n[0]),C.mul(m[3],n[2])), C.add(C.mul(m[2],n[1]),C.mul(m[3],n[3]))];
+function abcdNet(net,f,f0){
+  let M=[C.c(1,0),C.c(0,0),C.c(0,0),C.c(1,0)];
+  for(const el of net) M=abcdMul(M,abcdOf(el,f,f0));
+  return M;
+}
+const zinABCD=(M,ZL)=>C.div(C.add(C.mul(M[0],ZL),M[1]), C.add(C.mul(M[2],ZL),M[3]));
+const detABCD=(M)=>C.sub(C.mul(M[0],M[3]),C.mul(M[1],M[2]));
+function sParams(M,Z0){
+  const z=C.c(Z0,0), a=M[0], b=C.div(M[1],z), c=C.mul(M[2],z), d=M[3];
+  const den=C.add(C.add(a,b),C.add(c,d));
+  return {s11:C.div(C.sub(C.add(a,b),C.add(c,d)),den), s21:C.div(C.c(2,0),den)};
+}
+/* Travelling-wave solution on a line, referenced to V+ = 1 at the load. */
+function waveAt(ZL,Z0,dLam,lossDbLam){
+  const GL=gammaOf(ZL,Z0), g=C.c((lossDbLam||0)*dLam/DB_NP, 2*Math.PI*dLam);
+  const fwd=C.exp(g), rev=C.mul(GL,C.exp(C.scale(g,-1)));
+  return {fwd, rev, V:C.add(fwd,rev), I:C.scale(C.sub(fwd,rev),1/Z0), G:C.div(rev,fwd)};
+}
+//#CORE_END -----------------------------------------------------------------
+
+/* ======================= Smith chart renderer ============================ */
+class Smith{
+  constructor(canvas,opts={}){
+    this.cv=canvas; this.ctx=canvas.getContext('2d');
+    this.h0=(canvas.getAttribute('height')|0)||600;
+    this.opts=Object.assign({pad:26,labels:true,ruler:true},opts);
+    this.overlays=()=>{};
+    new ResizeObserver(()=>this.draw()).observe(canvas.parentElement);
+  }
+  fit(){
+    const dpr=window.devicePixelRatio||1, par=this.cv.parentElement;
+    const cs=getComputedStyle(par);
+    const w=Math.max(160, par.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight));
+    const h=this.opts.square? Math.min(w, this.opts.max||720) : this.h0;
+    const H=Math.min(h,w);
+    this.cv.width=w*dpr; this.cv.height=H*dpr; this.cv.style.height=H+'px';
+    this.ctx.setTransform(dpr,0,0,dpr,0,0);
+    this.W=w; this.H=H;
+    this.R=Math.min(w,H)/2-this.opts.pad;
+    this.cx=w/2; this.cy=H/2;
+  }
+  px(g){ return [this.cx+g.re*this.R, this.cy-g.im*this.R]; }
+  fromPx(x,y){ return C.c((x-this.cx)/this.R, -(y-this.cy)/this.R); }
+  clip(){ const c=this.ctx; c.beginPath(); c.arc(this.cx,this.cy,this.R,0,7); c.clip(); }
+  rCircle(r,col,w=1,alpha=1){
+    const c=this.ctx, R=this.R;
+    c.globalAlpha=alpha; c.strokeStyle=col; c.lineWidth=w; c.beginPath();
+    c.arc(this.cx+R*(r/(1+r)), this.cy, R/(1+r), 0, 7); c.stroke(); c.globalAlpha=1;
+  }
+  xArc(x,col,w=1,alpha=1){
+    if(Math.abs(x)<1e-9) return;
+    const c=this.ctx, R=this.R;
+    c.globalAlpha=alpha; c.strokeStyle=col; c.lineWidth=w; c.beginPath();
+    c.arc(this.cx+R, this.cy-R/x, R/Math.abs(x), 0, 7); c.stroke(); c.globalAlpha=1;
+  }
+  /* admittance grid = impedance grid rotated 180° */
+  gCircle(g,col,w,a){ const c=this.ctx,R=this.R;
+    c.globalAlpha=a;c.strokeStyle=col;c.lineWidth=w;c.beginPath();
+    c.arc(this.cx-R*(g/(1+g)), this.cy, R/(1+g),0,7);c.stroke();c.globalAlpha=1;}
+  bArc(b,col,w,a){ if(Math.abs(b)<1e-9)return; const c=this.ctx,R=this.R;
+    c.globalAlpha=a;c.strokeStyle=col;c.lineWidth=w;c.beginPath();
+    c.arc(this.cx-R, this.cy+R/b, R/Math.abs(b),0,7);c.stroke();c.globalAlpha=1;}
+  qArc(Q,col){
+    const c=this.ctx,R=this.R,rad=Math.sqrt(1+1/(Q*Q))*R;
+    c.save();this.clip();c.strokeStyle=col;c.lineWidth=1;c.setLineDash([4,4]);
+    for(const s of [1,-1]){c.beginPath();c.arc(this.cx,this.cy+s*R/Q,rad,0,7);c.stroke();}
+    c.restore();
+  }
+  swrCircle(mag,col){
+    const c=this.ctx;c.strokeStyle=col;c.lineWidth=1;c.setLineDash([3,4]);
+    c.beginPath();c.arc(this.cx,this.cy,mag*this.R,0,7);c.stroke();c.setLineDash([]);
+  }
+  grid(o){
+    const c=this.ctx;
+    c.clearRect(0,0,this.W,this.H);
+    // face
+    c.fillStyle='#0b1119'; c.beginPath(); c.arc(this.cx,this.cy,this.R,0,7); c.fill();
+    const MIN=[.1,.2,.3,.4,.6,.8,1.5,2.5,3,4,6,8,10,20], MAJ=[0,.2,.5,1,2,5];
+    c.save(); this.clip();
+    if(o.y){
+      for(const g of MIN) this.gCircle(g,'#37b6cc',1,.11);
+      for(const b of MIN.concat(MIN.map(v=>-v))) this.bArc(b,'#37b6cc',1,.11);
+      for(const g of MAJ) this.gCircle(g,'#37b6cc',1.1,.34);
+      for(const b of [.2,.5,1,2,5].flatMap(v=>[v,-v])) this.bArc(b,'#37b6cc',1.1,.34);
+    }
+    if(o.z){
+      for(const r of MIN) this.rCircle(r,'#e0604c',1,.12);
+      for(const x of MIN.concat(MIN.map(v=>-v))) this.xArc(x,'#e0604c',1,.12);
+      for(const r of MAJ) this.rCircle(r,'#e0604c',1.1,.38);
+      for(const x of [.2,.5,1,2,5].flatMap(v=>[v,-v])) this.xArc(x,'#e0604c',1.1,.38);
+      this.rCircle(1,'#e0604c',1.6,.75);
+    }
+    c.strokeStyle='#3a4c60';c.lineWidth=1;c.beginPath();
+    c.moveTo(this.cx-this.R,this.cy);c.lineTo(this.cx+this.R,this.cy);c.stroke();
+    c.restore();
+    // rim
+    c.strokeStyle='#4a6076';c.lineWidth=1.4;c.beginPath();c.arc(this.cx,this.cy,this.R,0,7);c.stroke();
+    if(o.q) this.qArc(o.q,'#8a6bd1');
+    if(this.opts.ruler && o.ruler!==false) this.ruler();
+    if(this.opts.labels) this.labels();
+    // centre
+    c.fillStyle='#5c7288';c.beginPath();c.arc(this.cx,this.cy,2,0,7);c.fill();
+  }
+  ruler(){
+    const c=this.ctx, R=this.R;
+    c.strokeStyle='#2e4256'; c.fillStyle='#61748a';
+    c.font='9px "IBM Plex Mono",monospace'; c.textAlign='center'; c.textBaseline='middle';
+    for(let k=0;k<50;k++){
+      const lam=k/100, ang=Math.PI-4*Math.PI*lam;   // toward generator = clockwise
+      const big=(k%5===0);
+      c.beginPath();
+      c.moveTo(this.cx+Math.cos(ang)*R, this.cy-Math.sin(ang)*R);
+      c.lineTo(this.cx+Math.cos(ang)*(R+(big?7:4)), this.cy-Math.sin(ang)*(R+(big?7:4)));
+      c.stroke();
+      if(big&&k%10===0){
+        c.fillText(lam.toFixed(2).slice(1), this.cx+Math.cos(ang)*(R+15), this.cy-Math.sin(ang)*(R+15));
+      }
+    }
+  }
+  labels(){
+    const c=this.ctx;
+    c.font='10px "IBM Plex Mono",monospace'; c.fillStyle='#7c8a9c';
+    c.textAlign='center'; c.textBaseline='top';
+    for(const r of [.2,.5,1,2,5]){
+      const [x,y]=this.px(C.c((r-1)/(r+1),0));
+      c.fillText(String(r), x, y+4);
+    }
+    c.textBaseline='middle';
+    c.fillStyle='#61748a';
+    c.fillText('short', this.cx-this.R+16, this.cy-11);
+    c.fillText('open',  this.cx+this.R-16, this.cy-11);
+    c.fillStyle='#7c8a9c';
+    c.fillText('+jx (inductive)', this.cx, this.cy-this.R+12);
+    c.fillText('−jx (capacitive)', this.cx, this.cy+this.R-12);
+  }
+  trace(pts,col,w=2.4,dash=null){
+    const c=this.ctx; if(pts.length<2) return;
+    c.save(); this.clip();
+    c.strokeStyle=col; c.lineWidth=w; c.lineJoin='round'; c.lineCap='round';
+    if(dash) c.setLineDash(dash);
+    c.beginPath();
+    pts.forEach((g,i)=>{const [x,y]=this.px(g); i?c.lineTo(x,y):c.moveTo(x,y);});
+    c.stroke(); c.restore();
+  }
+  arrow(a,b,col){
+    const [x1,y1]=this.px(a),[x2,y2]=this.px(b);
+    const ang=Math.atan2(y2-y1,x2-x1), c=this.ctx, s=7;
+    c.save();this.clip();c.fillStyle=col;c.beginPath();
+    c.moveTo(x2,y2);
+    c.lineTo(x2-s*Math.cos(ang-.4),y2-s*Math.sin(ang-.4));
+    c.lineTo(x2-s*Math.cos(ang+.4),y2-s*Math.sin(ang+.4));
+    c.fill();c.restore();
+  }
+  dot(g,col,shape='circle',label){
+    const c=this.ctx,[x,y]=this.px(g);
+    c.save();c.fillStyle=col;c.strokeStyle='#0a0f16';c.lineWidth=2;
+    c.beginPath();
+    if(shape==='diamond'){c.moveTo(x,y-6);c.lineTo(x+6,y);c.lineTo(x,y+6);c.lineTo(x-6,y);c.closePath();}
+    else c.arc(x,y,5.5,0,7);
+    c.fill();c.stroke();
+    if(label){
+      c.font='600 11px "IBM Plex Sans Condensed",sans-serif';
+      c.fillStyle=col;c.textAlign='center';c.textBaseline='bottom';
+      c.strokeStyle='#0a0f16';c.lineWidth=3;
+      c.strokeText(label,x,y-8);c.fillText(label,x,y-8);
+    }
+    c.restore();
+  }
+  draw(){ this.fit(); this.overlays(this); }
+}
+</script>
+
+<script>
+"use strict";
+/* ======================= state & formatting ============================== */
+const S = {
+  f0:1e9, Z0:50,
+  load:{mode:'fixed', a:25, b:-30, c:0},
+  net:[], hot:null,
+  ov:{z:true,y:false,swr:false,q:0},
+};
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>[...document.querySelectorAll(s)];
+const sig=(v,n=4)=>{
+  if(!Number.isFinite(v)) return '∞';
+  if(v===0) return '0';
+  const a=Math.abs(v);
+  if(a>=1e6) return v.toExponential(2);
+  if(a>=100) return v.toFixed(1);
+  if(a>=10) return v.toFixed(2);
+  if(a>=1) return v.toFixed(3);
+  return v.toFixed(n);
+};
+const zStr=(Z)=>`${sig(Z.re)} ${Z.im>=0?'+':'−'} j${sig(Math.abs(Z.im))}`;
+const fStr=(f)=> f>=1e9?`${sig(f/1e9)} GHz` : f>=1e6?`${sig(f/1e6)} MHz` : `${sig(f/1e3)} kHz`;
+function ro(host, items){
+  host.innerHTML = items.map(i=>
+    `<div><div class="k">${i.k}</div><div class="v ${i.cls||''}">${i.v}</div></div>`).join('');
+}
+const swrClass=(v)=> v<1.5?'ok' : v<3?'warn':'bad';
+
+/* ======================= global controls ================================= */
+const PRESETS=[
+  {n:'— pick a load —'},
+  {n:'50 Ω, matched', m:'fixed', a:50, b:0},
+  {n:'25 − j30 Ω (capacitive)', m:'fixed', a:25, b:-30},
+  {n:'100 + j80 Ω (inductive)', m:'fixed', a:100, b:80},
+  {n:'Short circuit', m:'fixed', a:0, b:0},
+  {n:'Open circuit', m:'fixed', a:1e9, b:0},
+  {n:'Half-wave dipole, 73 + j42 Ω', m:'fixed', a:73, b:42},
+  {n:'Patch antenna off-band, 120 − j60 Ω', m:'fixed', a:120, b:-60},
+  {n:'PA device output, 8 + j5 Ω', m:'fixed', a:8, b:5},
+  {n:'Series resonator 5 Ω · 3 nH · 8.44 pF', m:'srlc', a:5, b:3, c:8.44},
+  {n:'Parallel tank 600 Ω · 3 nH · 8.44 pF', m:'prlc', a:600, b:3, c:8.44},
+  {n:'Unknown cable end, 15 + j20 Ω', m:'fixed', a:15, b:20},
+];
+$('#preset').innerHTML = PRESETS.map((p,i)=>`<option value="${i}">${p.n}</option>`).join('');
+$('#preset').addEventListener('change', e=>{
+  const p=PRESETS[+e.target.value]; if(!p||!p.m) return;
+  $('#lmode').value=p.m; $('#la').value=p.a; $('#lb').value=p.b; $('#lc').value=p.c||0;
+  syncLoadUI(); readGlobals(); refresh();
+});
+function syncLoadUI(){
+  const m=$('#lmode').value;
+  const L=[$('#lab1'),$('#lab2'),$('#lab3')];
+  if(m==='fixed'){ L[0].textContent='R (Ω)'; L[1].textContent='X (Ω)'; $('#lcWrap').style.display='none'; }
+  else { L[0].textContent='R (Ω)'; L[1].textContent='L (nH)'; L[2].textContent='C (pF)'; $('#lcWrap').style.display=''; }
+}
+function readGlobals(){
+  S.f0 = (+$('#gf').value||1) * (+$('#gfu').value);
+  S.Z0 = Math.max(+$('#gz0').value||50, .1);
+  S.load = {mode:$('#lmode').value, a:+$('#la').value||0, b:+$('#lb').value||0, c:+$('#lc').value||0};
+}
+['gf','gfu','gz0','lmode','la','lb','lc'].forEach(id=>
+  $('#'+id).addEventListener('input',()=>{ syncLoadUI(); readGlobals(); refresh(); }));
+
+/* ======================= cascade editor ================================== */
+const addChips=$('#addChips');
+addChips.innerHTML = Object.entries(LIB).map(([t,d])=>{
+  const k = d.kind==='series'?'z' : d.kind==='shunt'?'y':'t';
+  return `<button class="chip ${k}" data-add="${t}">+ ${d.name}</button>`;
+}).join('');
+addChips.addEventListener('click',e=>{
+  const t=e.target.dataset.add; if(!t) return;
+  S.net.push(mkEl(t)); renderCascade(); refresh();
+});
+$('#clearNet').addEventListener('click',()=>{ S.net=[]; renderCascade(); refresh(); });
+
+/* the Line tab can walk any line that is actually in the network */
+function syncLineSources(){
+  const sel=$('#lsrc'); if(!sel) return;
+  const keep=sel.value;
+  const opts=['<option value="adhoc">Stand-alone line into the load</option>']
+    .concat(S.net.map((e,i)=>LIB[e.t].kind==='dist'||e.t==='tl'
+      ? `<option value="${i}">Network part ${i+1} — line ${e.v.toFixed(3)} λ, ${e.z0} Ω</option>` : '')
+      .filter(Boolean));
+  const html=opts.join('');
+  if(sel.dataset.h!==html){ sel.innerHTML=html; sel.dataset.h=html;
+    sel.value=[...sel.options].some(o=>o.value===keep)?keep:'adhoc'; }
+}
+function renderCascade(){
+  const host=$('#cascade');
+  $('#netCount').textContent = S.net.length ? `${S.net.length} part${S.net.length>1?'s':''}` : '';
+  if(!S.net.length){ host.innerHTML='<div class="empty">No network — the chart shows the bare load.<br>Add parts above or let the solver do it.</div>'; return; }
+  host.innerHTML = S.net.map((el,i)=>{
+    const d=LIB[el.t];
+    const sub = d.hasZ0 ? `<div class="sub">
+        <label>Z₀ <input data-i="${i}" data-k="z0" type="number" step="1" value="${el.z0}" style="width:52px"></label>
+        <label>dB/λ <input data-i="${i}" data-k="loss" type="number" step="0.05" min="0" value="${el.loss||0}" style="width:52px"></label>
+        <span>${(el.v*360).toFixed(1)}°</span></div>` : '';
+    return `<div class="el ${d.kind}" data-row="${i}">
+      <span class="grip">${i+1}</span>
+      <span class="nm">${d.name}</span>
+      <input data-i="${i}" data-k="v" type="number" step="${d.step}" value="${+el.v.toFixed(4)}">
+      <span class="unit">${d.unit}</span>
+      <span class="acts">
+        <button data-mv="${i}" data-dir="-1" title="Move toward source">↑</button>
+        <button data-mv="${i}" data-dir="1" title="Move toward load">↓</button>
+        <button data-del="${i}" title="Remove">✕</button>
+      </span>${sub}</div>`;
+  }).join('');
+}
+$('#cascade').addEventListener('input',e=>{
+  const i=+e.target.dataset.i; if(Number.isNaN(i)||!e.target.dataset.k) return;
+  const k=e.target.dataset.k;
+  S.net[i][k] = k==='v' ? (+e.target.value||0) : (+e.target.value||0);
+  refresh();
+});
+$('#cascade').addEventListener('click',e=>{
+  const del=e.target.dataset.del, mv=e.target.dataset.mv;
+  if(del!==undefined){ S.net.splice(+del,1); renderCascade(); refresh(); }
+  else if(mv!==undefined){
+    const i=+mv, j=i+ +e.target.dataset.dir;
+    if(j<0||j>=S.net.length) return;
+    [S.net[i],S.net[j]]=[S.net[j],S.net[i]]; renderCascade(); refresh();
+  }
+});
+$('#cascade').addEventListener('mouseover',e=>{
+  const r=e.target.closest('[data-row]'); if(!r) return;
+  S.hot=+r.dataset.row; paintHot(); drawBench();
+});
+$('#cascade').addEventListener('mouseleave',()=>{ S.hot=null; paintHot(); drawBench(); });
+function paintHot(){
+  $$('#cascade .el').forEach((n,i)=>n.classList.toggle('hot', i===S.hot));
+}
+
+/* ======================= bench computation & drawing ===================== */
+function benchData(f=S.f0){
+  const ZL=loadZ(S.load,f), segs=[]; let Z=ZL;
+  for(let i=S.net.length-1;i>=0;i--){
+    const el=S.net[i], pts=elPath(el,Z,f,S.f0);
+    segs.push({i, el, pts});
+    Z=pts[pts.length-1];
+  }
+  return {ZL, Zin:Z, segs};
+}
+const kindColor=(el)=> LIB[el.t].kind==='series' ? '#e0604c'
+                     : el.t==='tl' ? '#c2e94b' : '#37b6cc';
+
+const smith=new Smith($('#smith'),{square:true,pad:30,max:700});
+let cursorG=null;
+smith.overlays=(ch)=>{
+  const D=benchData();
+  const gIn=gammaOf(D.Zin,S.Z0), gL=gammaOf(D.ZL,S.Z0);
+  const hotEl = S.hot!=null ? S.net[S.hot] : null;
+  ch.grid({
+    z: S.ov.z || (hotEl && LIB[hotEl.t].kind==='series'),
+    y: S.ov.y || (hotEl && LIB[hotEl.t].kind==='shunt'),
+    q: S.ov.q,
+  });
+  if(S.ov.swr) ch.swrCircle(Math.min(C.abs(gIn),1),'#8a6bd1');
+  // trace, load → input
+  D.segs.forEach(sg=>{
+    const g=sg.pts.map(z=>gammaOf(z,S.Z0));
+    const dim = S.hot!=null && S.hot!==sg.i;
+    ch.ctx.globalAlpha = dim?0.25:1;
+    ch.trace(g, kindColor(sg.el), S.hot===sg.i?3.6:2.6);
+    const m=Math.floor(g.length*0.55);
+    if(g.length>3) ch.arrow(g[m-1],g[m], kindColor(sg.el));
+    ch.ctx.globalAlpha=1;
+  });
+  ch.dot(gL,'#ffb020','diamond', S.net.length?'load':'');
+  if(S.net.length) ch.dot(gIn,'#c2e94b','circle','input');
+  const pg = (typeof probeGamma==='function') ? probeGamma() : null;
+  if(pg) ch.dot(pg,'#8a6bd1','circle','probe');
+  if(cursorG) ch.dot(cursorG,'#93a6bb','circle');
+};
+function drawBench(){ smith.draw(); }
+
+function goTab(name){ $('#tab-'+name).click(); }
+function statusBar(D){
+  const g=gammaOf(D.Zin,S.Z0), gm=Math.min(C.abs(g),10), s=vswrOf(gm), rl=rlOf(gm);
+  const chain = S.net.length
+    ? S.net.map(e=>LIB[e.t].name.replace('Series ','series ').replace('Shunt ','shunt ')).join(' → ')
+    : 'none — bare load';
+  $('#statusbar').innerHTML=[
+    ['f₀', fStr(S.f0), 'sweep'],
+    ['Z₀', S.Z0+' Ω', ''],
+    ['load', zStr(D.ZL)+' Ω', 'bench'],
+    ['network', chain, 'bench'],
+    ['Z in', zStr(D.Zin)+' Ω', 'bench'],
+    ['VSWR', s===Infinity?'∞':s.toFixed(2), 'line'],
+    ['return loss', (rl===Infinity?'∞':rl.toFixed(1))+' dB', 'sweep'],
+  ].map(([k,v,go])=>`<div class="s ${go?'link':''}" ${go?`data-go="${go}"`:''}>
+      <span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+}
+$('#statusbar').addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]'); if(g) goTab(g.dataset.go);
+});
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-gotab]'); if(g) goTab(g.dataset.gotab);
+});
+
+function refresh(){
+  const D=benchData();
+  const g=gammaOf(D.Zin,S.Z0), gm=Math.min(C.abs(g),10), s=vswrOf(gm);
+  const Y=C.inv(D.Zin), Q=Math.abs(D.Zin.im)/Math.max(D.Zin.re,1e-9);
+  ro($('#ro'),[
+    {k:'Z in', v:`${zStr(D.Zin)} Ω`},
+    {k:'z normalised', v:zStr(C.scale(D.Zin,1/S.Z0))},
+    {k:'Y in', v:`${sig(Y.re*1e3)} ${Y.im>=0?'+':'−'} j${sig(Math.abs(Y.im)*1e3)} <small>mS</small>`},
+    {k:'Γ', v:`${gm.toFixed(4)} ∠${(C.arg(g)*180/Math.PI).toFixed(1)}°`},
+    {k:'VSWR', v:s===Infinity?'∞':s.toFixed(3), cls:swrClass(s)},
+    {k:'Return loss', v:`${rlOf(gm)===Infinity?'∞':rlOf(gm).toFixed(2)} <small>dB</small>`, cls:swrClass(s)},
+    {k:'Mismatch loss', v:`${mismatchLoss(gm).toFixed(3)} <small>dB</small>`},
+    {k:'Q of Z in', v:Q.toFixed(2)},
+  ]);
+  statusBar(D);
+  syncLineSources();
+  drawBench(); drawLine(); drawSweep();
+}
+
+/* pointer: drag the load around the chart */
+const HINT0=$('#hoverHint').textContent;
+
+/* Every chart is an input device. Markers are grab handles; empty space drags
+   whatever that chart's default quantity is.                              */
+function setLoadZ(Z){
+  if(!C.isFin(Z)) return;
+  $('#lmode').value='fixed';
+  $('#la').value=Math.max(Z.re,0.02).toFixed(2);
+  $('#lb').value=Math.max(Math.min(Z.im,1e6),-1e6).toFixed(2);
+  syncLoadUI(); readGlobals(); refresh();
+}
+function attachChart(ch, spec){
+  const cv=ch.cv; let mode=null, dragging=false;
+  const gAt=(e)=>{
+    const r=cv.getBoundingClientRect();
+    let g=ch.fromPx(e.clientX-r.left, e.clientY-r.top);
+    const m=C.abs(g); return m>0.999 ? C.scale(g,0.999/m) : g;
+  };
+  const pick=(e)=>{
+    const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+    let best=null, bd=26;
+    (spec.handles()||[]).forEach(h=>{
+      if(!h.g||!C.isFin(h.g)) return;
+      const [hx,hy]=ch.px(h.g), d=Math.hypot(hx-x,hy-y);
+      if(d<bd){ bd=d; best=h.kind; }
+    });
+    return best;
+  };
+  cv.addEventListener('pointerdown',e=>{
+    mode=pick(e)||spec.def; if(!mode) return;
+    dragging=true; cv.setPointerCapture(e.pointerId);
+    spec.onDrag(mode, gAt(e)); e.preventDefault();
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(dragging){ spec.onDrag(mode, gAt(e)); return; }
+    cv.style.cursor = pick(e) ? 'grab' : (spec.def ? 'crosshair' : 'default');
+    if(spec.onHover) spec.onHover(gAt(e), e);
+  });
+  const stop=()=>{ dragging=false; mode=null; };
+  cv.addEventListener('pointerup',stop);
+  cv.addEventListener('pointercancel',stop);
+  cv.addEventListener('pointerleave',()=>{ stop(); if(spec.onLeave) spec.onLeave(); });
+}
+attachChart(smith,{
+  def:'load',
+  handles:()=>{
+    const D=benchData(), hs=[{g:gammaOf(D.ZL,S.Z0), kind:'load'}];
+    if(S.net.length) hs.push({g:gammaOf(D.Zin,S.Z0), kind:'input'});
+    const pg=(typeof probeGamma==='function')?probeGamma():null;
+    if(pg) hs.push({g:pg, kind:'probe'});
+    return hs;
+  },
+  onDrag:(kind,G)=>{
+    const Z=zOfGamma(G,S.Z0);
+    if(kind==='input')      setLoadZ(uncascadeZ(S.net, Z, S.f0, S.f0));
+    else if(kind==='probe') { if(typeof setProbeToGamma==='function') setProbeToGamma(G); }
+    else                    setLoadZ(Z);
+  },
+  onHover:(G)=>{
+    if(C.abs(G)<=1){
+      cursorG=G;
+      const Z=zOfGamma(G,S.Z0), Y=C.scale(C.inv(Z),S.Z0);
+      $('#hoverHint').innerHTML=`cursor → <span class="mono">z = ${zStr(C.scale(Z,1/S.Z0))}</span> · <span class="mono">Z = ${zStr(Z)} Ω</span> · <span class="mono">y = ${zStr(Y)}</span> · <span class="mono">|Γ| = ${C.abs(G).toFixed(3)}</span>`;
+    } else cursorG=null;
+    drawBench();
+  },
+  onLeave:()=>{ cursorG=null; $('#hoverHint').textContent=HINT0; drawBench(); },
+});
+
+/* overlay toggles */
+['ovZ','ovY','ovSWR','ovQ','qVal','ovLambda'].forEach(id=>$('#'+id).addEventListener('input',()=>{
+  S.ov.z=$('#ovZ').checked; S.ov.y=$('#ovY').checked; S.ov.swr=$('#ovSWR').checked;
+  S.ov.q=$('#ovQ').checked ? Math.max(+$('#qVal').value||1,.2) : 0;
+  smith.opts.ruler=$('#ovLambda').checked;
+  drawBench();
+}));
+
+/* ======================= matching solver UI ============================== */
+$$('[data-solve]').forEach(b=>b.addEventListener('click',()=>solve(b.dataset.solve)));
+function solCard(title, detail, net){
+  const Z=cascadeZ(net, loadZ(S.load,S.f0), S.f0, S.f0);
+  const gm=C.abs(gammaOf(Z,S.Z0));
+  const rl=rlOf(gm);
+  return `<div class="el dist" style="grid-template-columns:1fr auto;margin-bottom:6px">
+    <div><div class="nm" style="font-weight:600">${title}</div>
+    <div class="sub" style="grid-column:1/-1">${detail} · RL ${rl===Infinity?'∞':rl.toFixed(1)} dB</div></div>
+    <button class="btn tiny" data-apply='${JSON.stringify(net)}'>Apply</button></div>`;
+}
+function solve(kind){
+  readGlobals();
+  const ZL=loadZ(S.load,S.f0), f=S.f0, Z0=S.Z0, out=$('#solutions');
+  let html='';
+  if(kind==='l'){
+    const sols=solveL(ZL,Z0,f);
+    html = sols.length ? sols.map(s=>solCard(
+        s.label,
+        s.net.map(e=>`${LIB[e.t].name} ${sig(e.v,3)} ${LIB[e.t].unit}`).join(' · '),
+        s.net)).join('')
+      : `<p class="hint">No two-element L-network reaches ${Z0} Ω from this load. Add a line first, then solve again.</p>`;
+  }
+  if(kind==='stub'){
+    let cards='';
+    for(const open of [false,true]){
+      solveStub(ZL,Z0,f,open).forEach(s=>{
+        const net=[{...mkEl(open?'so':'ss'), v:s.l, z0:Z0}, {...mkEl('tl'), v:s.d, z0:Z0}];
+        cards+=solCard(`${open?'Open':'Shorted'} shunt stub`,
+          `line ${s.d.toFixed(4)} λ (${(s.d*360).toFixed(1)}°) · stub ${s.l.toFixed(4)} λ (${(s.l*360).toFixed(1)}°)`, net);
+      });
+    }
+    html = cards || `<p class="hint">No stub solution found.</p>`;
+  }
+  if(kind==='qw'){
+    const sols=solveQW(ZL,Z0,f);
+    html = sols.length ? sols.map(s=>{
+      const net=[{...mkEl('tl'), v:0.25, z0:s.Zq}, {...mkEl('tl'), v:s.d, z0:Z0}];
+      return solCard('λ/4 transformer',
+        `walk ${s.d.toFixed(4)} λ to R = ${s.R.toFixed(1)} Ω, then λ/4 of ${s.Zq.toFixed(1)} Ω`, net);
+    }).join('') : `<p class="hint">Load never crosses the real axis — check the values.</p>`;
+  }
+  out.innerHTML = html + (html.includes('data-apply') ? `<div class="row" style="margin-top:8px">
+      <button class="btn tiny ghost" data-gotab="sweep">→ how wide is it?</button>
+      <button class="btn tiny ghost" data-gotab="line">→ walk its line</button></div>` : '');
+}
+$('#solutions').addEventListener('click',e=>{
+  const j=e.target.dataset.apply; if(!j) return;
+  S.net = JSON.parse(j).map(e=>({...e, id:Math.random().toString(36).slice(2,8)}));
+  renderCascade(); refresh();
+});
+
+/* ======================= tabs ============================================ */
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{
+  $$('.tab').forEach(x=>x.setAttribute('aria-selected', String(x===t)));
+  $$('.view').forEach(v=>v.classList.toggle('on', v.id==='view-'+t.dataset.view));
+  requestAnimationFrame(()=>{drawBench();drawLine();drawSweep();drawGame&&drawGame();});
+}));
+</script>
+
+<script>
+"use strict";
+/* ======================= rectangular plot helper ========================= */
+class Plot{
+  constructor(cv){ this.cv=cv; this.ctx=cv.getContext('2d'); this.owner=null;
+    this.h0=(cv.getAttribute('height')|0)||400;
+    new ResizeObserver(()=>this.owner&&this.owner()).observe(cv.parentElement); }
+  fit(){
+    const dpr=window.devicePixelRatio||1, par=this.cv.parentElement, cs=getComputedStyle(par);
+    const w=Math.max(240, par.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight));
+    const h=this.h0;
+    this.cv.width=Math.round(w*dpr); this.cv.height=Math.round(h*dpr); this.cv.style.height=h+'px';
+    this.ctx.setTransform(dpr,0,0,dpr,0,0); this.ctx.clearRect(0,0,w,h);
+    this.W=w; this.H=h;
+  }
+  axes(o){
+    this.o=Object.assign({l:56,r:18,t:16,b:36,xticks:8,yticks:5,flipX:false,
+      xfmt:v=>sig(v,2), yfmt:v=>sig(v,2)},o);
+    const c=this.ctx,{l,r,t,b}=this.o;
+    this.pl=l; this.pr=this.W-r; this.pt=t; this.pb=this.H-b;
+    c.fillStyle='#0b1119'; c.fillRect(l,t,this.pr-l,this.pb-t);
+    c.strokeStyle='#1e2b3a'; c.lineWidth=1;
+    c.font='10px "IBM Plex Mono",monospace'; c.fillStyle='#61748a';
+    c.textAlign='center'; c.textBaseline='top';
+    for(let i=0;i<=this.o.xticks;i++){
+      const v=o.x0+(o.x1-o.x0)*i/this.o.xticks, x=this.X(v);
+      c.beginPath();c.moveTo(x,t);c.lineTo(x,this.pb);c.stroke();
+      c.fillText(this.o.xfmt(v), x, this.pb+6);
+    }
+    c.textAlign='right'; c.textBaseline='middle';
+    for(let i=0;i<=this.o.yticks;i++){
+      const v=o.y0+(o.y1-o.y0)*i/this.o.yticks, y=this.Y(v);
+      c.beginPath();c.moveTo(l,y);c.lineTo(this.pr,y);c.stroke();
+      c.fillText(this.o.yfmt(v), l-7, y);
+    }
+    c.strokeStyle='#3a4c60';c.strokeRect(l,t,this.pr-l,this.pb-t);
+    c.fillStyle='#7c8a9c'; c.textAlign='center'; c.textBaseline='bottom';
+    if(o.xlabel) c.fillText(o.xlabel,(l+this.pr)/2,this.H-2);
+    if(o.ylabel){c.save();c.translate(11,(t+this.pb)/2);c.rotate(-Math.PI/2);
+      c.textBaseline='top';c.fillText(o.ylabel,0,0);c.restore();}
+    if(o.title){c.textAlign='left';c.textBaseline='top';c.fillStyle='#93a6bb';
+      c.font='600 12px "IBM Plex Sans Condensed",sans-serif';c.fillText(o.title,l+6,t+5);}
+  }
+  X(v){const{x0,x1,flipX}=this.o; const u=(v-x0)/((x1-x0)||1);
+    return flipX ? this.pr-u*(this.pr-this.pl) : this.pl+u*(this.pr-this.pl);}
+  Y(v){const{y0,y1}=this.o; return this.pb-(v-y0)/((y1-y0)||1)*(this.pb-this.pt);}
+  clipOn(){const c=this.ctx;c.save();c.beginPath();
+    c.rect(this.pl,this.pt,this.pr-this.pl,this.pb-this.pt);c.clip();}
+  clipOff(){this.ctx.restore();}
+  line(pts,col,w=2,dash=null){
+    const c=this.ctx; this.clipOn();
+    c.strokeStyle=col;c.lineWidth=w;c.lineJoin='round';if(dash)c.setLineDash(dash);
+    c.beginPath(); pts.forEach((p,i)=>{const x=this.X(p[0]),y=this.Y(p[1]); i?c.lineTo(x,y):c.moveTo(x,y);});
+    c.stroke(); this.clipOff();
+  }
+  band(pts,col){ // pts [[x,ytop,ybot]]
+    const c=this.ctx; this.clipOn(); c.fillStyle=col; c.beginPath();
+    pts.forEach((p,i)=>{const x=this.X(p[0]),y=this.Y(p[1]); i?c.lineTo(x,y):c.moveTo(x,y);});
+    for(let i=pts.length-1;i>=0;i--) c.lineTo(this.X(pts[i][0]),this.Y(pts[i][2]));
+    c.closePath(); c.fill(); this.clipOff();
+  }
+  vline(x,col,label,dash=[4,4]){
+    const c=this.ctx;this.clipOn();c.strokeStyle=col;c.lineWidth=1.3;c.setLineDash(dash);
+    c.beginPath();c.moveTo(this.X(x),this.pt);c.lineTo(this.X(x),this.pb);c.stroke();this.clipOff();
+    if(label){c.fillStyle=col;c.font='10px "IBM Plex Mono",monospace';c.textAlign='center';
+      c.textBaseline='top';c.fillText(label,this.X(x),this.pt+3);}
+  }
+  hline(y,col,dash=[4,4]){const c=this.ctx;this.clipOn();c.strokeStyle=col;c.lineWidth=1;
+    c.setLineDash(dash);c.beginPath();c.moveTo(this.pl,this.Y(y));c.lineTo(this.pr,this.Y(y));
+    c.stroke();this.clipOff();}
+  dot(x,y,col,r=4){const c=this.ctx;this.clipOn();c.fillStyle=col;c.beginPath();
+    c.arc(this.X(x),this.Y(y),r,0,7);c.fill();this.clipOff();}
+  tag(x,y,text,col,align='left',size=11){
+    const c=this.ctx;this.clipOn();
+    c.font=`${size}px "IBM Plex Sans Condensed",sans-serif`;c.fillStyle=col;
+    c.textAlign=align;c.textBaseline='middle';c.fillText(text,this.X(x),this.Y(y));this.clipOff();
+  }
+  legend(items){
+    const c=this.ctx;let x=this.pr-8;c.textAlign='right';c.textBaseline='top';
+    c.font='11px "IBM Plex Sans Condensed",sans-serif';
+    items.reverse().forEach(it=>{ const w=c.measureText(it.t).width;
+      c.fillStyle=it.c;c.fillText(it.t,x,this.pt+4); x-=w+8;
+      c.fillRect(x,this.pt+9,10,2); x-=16; });
+  }
+}
+
+/* ======================= LINE & WAVES ==================================== */
+const wavePlot=new Plot($('#wave')), zPlot=new Plot($('#zline'));
+const smithLine=new Smith($('#smithLine'),{square:true,pad:20,labels:false,ruler:true});
+const phasorPane=new Smith($('#phasor'),{square:true,pad:30,labels:false,ruler:false});
+let phase=0, walking=false;
+const TAU=2*Math.PI, wrap=(a)=>((a%TAU)+TAU)%TAU;
+
+/* Which line are we standing on, and what terminates it?  Either a stand-alone
+   line into the load, or any line that is actually in the bench network — in
+   which case it is terminated by everything downstream of it.            */
+function lineContext(){
+  const sel=$('#lsrc'), f=S.f0;
+  const el = sel && sel.value!=='adhoc' ? S.net[+sel.value] : null;
+  if(!el || LIB[el.t].kind!=='dist')
+    return {adhoc:true, Z0:Math.max(+$('#lz0').value||50,.1),
+            loss:Math.max(+$('#lloss').value||0,0), len:Math.max(+$('#llen').value||1,.01),
+            Zterm:loadZ(S.load,f)};
+  const i=+sel.value;
+  let Z=loadZ(S.load,f);
+  for(let k=S.net.length-1;k>i;k--) Z=applyEl(S.net[k],Z,f,S.f0);
+  return {adhoc:false, idx:i, Z0:el.z0, loss:el.loss||0, len:Math.max(el.v,.01), Zterm:Z};
+}
+const probeD=(cx)=>Math.min((+$('#lpos').value||0)*cx.len, cx.len);
+/* the probe plane, expressed on the bench chart */
+function probeGamma(){
+  const cx=lineContext(); if(cx.adhoc) return null;
+  return gammaOf(lineZin(cx.Zterm,cx.Z0,probeD(cx),S.f0,S.f0,cx.loss), S.Z0);
+}
+
+/* drop the probe wherever you point on the rotation locus */
+function setProbeToGamma(G){
+  const cx=lineContext(), GL=gammaOf(cx.Zterm,cx.Z0);
+  const d0=wrap(C.arg(GL)-C.arg(G))/(2*TAU);       // first solution, within [0, λ/2)
+  const cur=probeD(cx); let best=Math.min(d0,cx.len), bd=1e9;
+  for(let k=-2;k<=2*cx.len+2;k++){
+    const c=d0+k*0.5;
+    if(c>=0 && c<=cx.len && Math.abs(c-cur)<bd){ bd=Math.abs(c-cur); best=c; }
+  }
+  $('#lpos').value=Math.max(0,Math.min(1,best/cx.len));
+  drawLine(); drawBench();
+}
+function drawLine(){
+  const cx=lineContext(), f=S.f0, Z0=cx.Z0, L=cx.len, loss=cx.loss, ZL=cx.Zterm;
+  if(!cx.adhoc){ $('#llen').value=Math.min(L,2); $('#lz0').value=Z0; $('#lloss').value=loss; }
+  const d=probeD(cx);
+  const GL=gammaOf(ZL,Z0), gm=Math.min(C.abs(GL),1), swr=vswrOf(gm);
+  $('#llenV').textContent=`${L.toFixed(3)} λ`;
+  $('#lposV').textContent=`${d.toFixed(3)} λ  (${(d*360).toFixed(0)}° of line, ${(d*720).toFixed(0)}° of rotation)`;
+
+  const N=600, pts=[];
+  for(let i=0;i<=N;i++){const dd=L*i/N; pts.push([dd, waveAt(ZL,Z0,dd,loss)]);}
+  const at=waveAt(ZL,Z0,d,loss), Gd=at.G;
+  const Vmax=Math.max(...pts.map(p=>C.abs(p[1].V)))*1.1 || 1;
+  const inst=(z)=>C.mul(z,C.exp(C.c(0,phase))).re;
+
+  /* ---- voltage along the line ---- */
+  wavePlot.fit();
+  wavePlot.axes({x0:0,x1:L,y0:-Vmax,y1:Vmax,flipX:true,
+    xlabel:'← toward the source        distance from the load (λ)        toward the load →',
+    ylabel:'v / V⁺(load)', xticks:Math.min(10,Math.max(4,Math.round(L*4))), yticks:4});
+  if($('#showEnv').checked){
+    wavePlot.band(pts.map(p=>[p[0],C.abs(p[1].V),-C.abs(p[1].V)]),'rgba(194,233,75,.10)');
+    wavePlot.line(pts.map(p=>[p[0],C.abs(p[1].V)]),'rgba(194,233,75,.5)',1.4,[5,4]);
+    wavePlot.line(pts.map(p=>[p[0],-C.abs(p[1].V)]),'rgba(194,233,75,.5)',1.4,[5,4]);
+  }
+  /* voltage maxima / minima, from the phase of Γ */
+  const phiL=wrap(C.arg(GL));
+  const marks=[];
+  for(let k=-1;k<2*L+2;k++){
+    const dm=phiL/(2*TAU)+k/2, dn=wrap(phiL-Math.PI)/(2*TAU)+k/2;
+    if(dm>=0&&dm<=L) marks.push([dm,'max']);
+    if(dn>=0&&dn<=L) marks.push([dn,'min']);
+  }
+  if(gm>0.02) marks.forEach(([x,kind])=>{
+    wavePlot.vline(x, kind==='max'?'rgba(194,233,75,.35)':'rgba(138,107,209,.5)',null,[2,4]);
+    wavePlot.tag(x, kind==='max'?Vmax*0.86:-Vmax*0.86, kind==='max'?'V max':'V min',
+      kind==='max'?'rgba(194,233,75,.8)':'rgba(138,107,209,.9)','center',10);
+  });
+  wavePlot.line(pts.map(p=>[p[0],inst(p[1].fwd)]),'rgba(224,96,76,.55)',1.5);
+  wavePlot.line(pts.map(p=>[p[0],inst(p[1].rev)]),'rgba(55,182,204,.6)',1.5);
+  wavePlot.line(pts.map(p=>[p[0],inst(p[1].V)]),'#c2e94b',2.6);
+  if($('#showI').checked)
+    wavePlot.line(pts.map(p=>[p[0],inst(C.scale(p[1].I,Z0))]),'#ffb020',1.6,[6,3]);
+  wavePlot.vline(d,'#ffb020','probe');
+  wavePlot.hline(0,'#3a4c60',[2,3]);
+  /* the three numbers that build the phasor picture */
+  wavePlot.dot(d,inst(at.fwd),'#e0604c',4.5);
+  wavePlot.dot(d,inst(at.rev),'#37b6cc',4.5);
+  wavePlot.dot(d,inst(at.V),'#c2e94b',5.5);
+  $('#waveCap').textContent=`|Γ| ${gm.toFixed(3)} · VSWR ${swr===Infinity?'∞':swr.toFixed(2)} · |V|max/min ${(1+gm).toFixed(2)}/${(1-gm).toFixed(2)}`;
+
+  /* ---- rotation on the chart ---- */
+  smithLine.overlays=(ch)=>{
+    ch.grid({z:true,y:false});
+    if(gm>0.01) ch.swrCircle(gm,'rgba(138,107,209,.5)');
+    const arc=[]; for(let i=0;i<=160;i++) arc.push(gammaOf(lineZin(ZL,Z0,d*i/160,f,f,loss),Z0));
+    ch.trace(arc,'#c2e94b',2.6);
+    if(arc.length>6) ch.arrow(arc[arc.length-2],arc[arc.length-1],'#c2e94b');
+    ch.dot(GL,'#ffb020','diamond');
+    ch.dot(gammaOf(lineZin(ZL,Z0,d,f,f,loss),Z0),'#c2e94b','circle');
+  };
+  smithLine.draw();
+  $('#capG').textContent=`Γ = ${C.abs(Gd).toFixed(3)} ∠${(C.arg(Gd)*180/Math.PI).toFixed(0)}°  ·  turned ${(d*720).toFixed(0)}°`;
+
+  /* ---- the same instant, drawn as phasors ---- */
+  phasorPane.overlays=(ch)=>{
+    const c=ch.ctx; c.clearRect(0,0,ch.W,ch.H);
+    const locked=$('#lock').checked;
+    const fwd = locked ? C.c(1,0) : C.exp(C.c(0, TAU*d+phase));
+    const rev = C.mul(fwd,Gd), sum=C.add(fwd,rev);
+    const m=Math.max(C.abs(Gd),.3), U=ch.R/(1+m+.12);
+    const P=(z)=>[ch.cx+z.re*U, ch.cy-z.im*U];
+    c.strokeStyle='#1e2b3a'; c.lineWidth=1;
+    c.beginPath();c.moveTo(ch.cx-ch.R,ch.cy);c.lineTo(ch.cx+ch.R,ch.cy);
+    c.moveTo(ch.cx,ch.cy-ch.R);c.lineTo(ch.cx,ch.cy+ch.R);c.stroke();
+    c.beginPath();c.arc(ch.cx,ch.cy,U,0,7);c.stroke();
+    const arw=(a,b,col,w,label)=>{
+      const [x1,y1]=P(a),[x2,y2]=P(b),ang=Math.atan2(y2-y1,x2-x1),h=8;
+      c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+      c.fillStyle=col;c.beginPath();c.moveTo(x2,y2);
+      c.lineTo(x2-h*Math.cos(ang-.38),y2-h*Math.sin(ang-.38));
+      c.lineTo(x2-h*Math.cos(ang+.38),y2-h*Math.sin(ang+.38));c.fill();
+      if(label){c.font='600 11px "IBM Plex Sans Condensed",sans-serif';c.textAlign='center';
+        c.textBaseline='bottom';c.strokeStyle='#0a0f16';c.lineWidth=3;
+        const mx=(x1+x2)/2,my=(y1+y2)/2-4;c.strokeText(label,mx,my);c.fillText(label,mx,my);}
+    };
+    /* locus the reflected phasor sweeps as you walk the line */
+    const [fx,fy]=P(fwd);
+    c.strokeStyle='rgba(55,182,204,.35)';c.lineWidth=1;c.setLineDash([3,4]);
+    c.beginPath();c.arc(fx,fy,C.abs(Gd)*U,0,7);c.stroke();c.setLineDash([]);
+    if(!locked){ /* the instantaneous value the green trace shows */
+      const [sx,sy]=P(sum);
+      c.strokeStyle='rgba(194,233,75,.4)';c.setLineDash([2,3]);c.lineWidth=1;
+      c.beginPath();c.moveTo(sx,sy);c.lineTo(sx,ch.cy);c.stroke();c.setLineDash([]);
+      c.fillStyle='#c2e94b';c.beginPath();c.arc(sx,ch.cy,3.5,0,7);c.fill();
+      c.font='10px "IBM Plex Mono",monospace';c.textAlign='center';c.textBaseline='top';
+      c.fillText('v(d,t)',sx,ch.cy+6);
+    }
+    arw(C.c(0,0),fwd,'#e0604c',2.4,'V⁺');
+    arw(fwd,sum,'#37b6cc',2.4,'V⁻');
+    arw(C.c(0,0),sum,'#c2e94b',3,'V');
+  };
+  phasorPane.draw();
+  const ang=C.arg(Gd)*180/Math.PI;
+  $('#capP').textContent=`V⁻/V⁺ = Γ(d) · angle between them ${ang.toFixed(0)}° · |V| = ${C.abs(at.V).toFixed(3)}`;
+
+  /* ---- impedance along the line ---- */
+  const zs=pts.map(p=>[p[0], lineZin(ZL,Z0,p[0],f,f,loss)]);
+  const cap=6*Z0, cl=v=>Math.max(-cap,Math.min(cap,v));
+  zPlot.fit();
+  zPlot.axes({x0:0,x1:L,y0:-cap,y1:cap,flipX:true,xticks:Math.min(10,Math.max(4,Math.round(L*4))),
+    yticks:4,xlabel:'distance from the load (λ)',ylabel:'Ω'});
+  zPlot.hline(0,'#3a4c60',[2,3]); zPlot.hline(Z0,'#5c7288',[2,3]);
+  zPlot.line(zs.map(p=>[p[0],cl(p[1].re)]),'#e0604c',2);
+  zPlot.line(zs.map(p=>[p[0],cl(p[1].im)]),'#37b6cc',2);
+  zPlot.vline(d,'#ffb020');
+  zPlot.legend([{t:'R',c:'#e0604c'},{t:'X',c:'#37b6cc'}]);
+  const Zp=lineZin(ZL,Z0,d,f,f,loss);
+  $('#capZ').textContent=`Z(d) = ${zStr(Zp)} Ω · R ranges ${(Z0/ (swr===Infinity?1e9:swr)).toFixed(1)} … ${(Z0*(swr===Infinity?1e9:swr)).toFixed(1)} Ω`;
+
+  /* ---- readouts + plain-language reading ---- */
+  const phi=wrap(C.arg(Gd));
+  const toMax=phi/(2*TAU), toMin=wrap(phi-Math.PI)/(2*TAU);
+  ro($('#lro'),[
+    {k:'Z at probe', v:`${zStr(Zp)} Ω`},
+    {k:'Γ at probe', v:`${C.abs(Gd).toFixed(3)} ∠${ang.toFixed(0)}°`},
+    {k:'|V| / V⁺', v:C.abs(at.V).toFixed(3)},
+    {k:'|I|·Z₀ / V⁺', v:(C.abs(at.I)*Z0).toFixed(3)},
+    {k:'to next V max', v:`${toMax.toFixed(3)} <small>λ</small>`},
+    {k:'to next V min', v:`${toMin.toFixed(3)} <small>λ</small>`},
+  ]);
+  let verdict;
+  if(gm<0.02) verdict=`The load is matched, so there is no reflected wave to add: the cyan arrow has collapsed and |V| is flat along the line. Walking changes nothing — the chart point sits at the centre and stays there.`;
+  else if(toMax<0.008||toMax>0.492)
+    verdict=`The two arrows point the same way, so they <b>add</b>: this is a <b>voltage maximum</b>, |V| = ${(C.abs(at.V)).toFixed(2)}·V⁺. Γ is real and positive, which is the right-hand real axis of the chart, and Z is purely resistive at its largest value, ${(Z0*swr).toFixed(1)} Ω = Z₀·VSWR.`;
+  else if(toMin<0.008||toMin>0.492)
+    verdict=`The two arrows point in <b>opposite</b> directions, so they subtract: this is a <b>voltage minimum</b>, |V| = ${(C.abs(at.V)).toFixed(2)}·V⁺. Γ is real and negative — the left-hand real axis — and Z is purely resistive at its smallest value, ${(Z0/swr).toFixed(1)} Ω = Z₀/VSWR.`;
+  else verdict=`The reflected arrow sits <b>${ang.toFixed(0)}°</b> from the forward one, so they partly cancel and |V| = ${C.abs(at.V).toFixed(2)}·V⁺, between the ${(1-gm).toFixed(2)} and ${(1+gm).toFixed(2)} extremes. Z is complex here: <b>${zStr(Zp)} Ω</b>. Walk <b>${toMax.toFixed(3)} λ</b> further and the arrows line up (V max); <b>${toMin.toFixed(3)} λ</b> and they oppose (V min).`;
+  $('#interp').innerHTML = `<b>${d.toFixed(3)} λ from the load.</b> ` + verdict +
+    ` Moving the probe rotates Γ clockwise at <b>720° per wavelength</b> — twice the electrical length of the line, because the reflected wave travels the distance twice. Half a wavelength of line is one full lap, which is why the standing-wave pattern repeats every λ/2.`;
+}
+/* sliders write straight into the network when you are walking one of its lines */
+function onLineInput(e){
+  const cx=lineContext(), id=e&&e.target&&e.target.id;
+  if(!cx.adhoc && (id==='llen'||id==='lz0'||id==='lloss')){
+    const el=S.net[cx.idx];
+    if(id==='llen') el.v=Math.max(+$('#llen').value||.01,.01);
+    if(id==='lz0')  el.z0=Math.max(+$('#lz0').value||50,.1);
+    if(id==='lloss')el.loss=Math.max(+$('#lloss').value||0,0);
+    renderCascade(); refresh(); return;
+  }
+  drawLine(); drawBench();
+}
+['lz0','lloss','llen','lpos','showI','showEnv','anim','lock'].forEach(id=>
+  $('#'+id).addEventListener('input',onLineInput));
+$('#lsrc').addEventListener('change',()=>{
+  const cx=lineContext();
+  $('#lz0').value=cx.Z0; $('#lloss').value=cx.loss; $('#llen').value=Math.min(cx.len,2);
+  drawLine(); drawBench();
+});
+$('#walk').addEventListener('click',()=>{
+  walking=!walking;
+  $('#walk').textContent = walking ? '❚❚ Pause the walk' : '▶ Walk toward the source';
+});
+$('#toMax').addEventListener('click',()=>{
+  const cx=lineContext(), d=probeD(cx);
+  const Gd=waveAt(cx.Zterm,cx.Z0,d,cx.loss).G;
+  let nd=d+wrap(C.arg(Gd))/(2*TAU);
+  if(nd>cx.len) nd-=0.5*Math.ceil((nd-cx.len)/0.5);
+  $('#lpos').value=Math.max(0,Math.min(1,nd/cx.len)); drawLine(); drawBench();
+});
+attachChart(smithLine,{
+  def:'term',
+  handles:()=>{
+    const cx=lineContext(), f=S.f0;
+    const hs=[{g:gammaOf(cx.Zterm,cx.Z0), kind:'term'}];
+    for(let i=0;i<=48;i++)                       // anywhere on the locus grabs the probe
+      hs.push({g:gammaOf(lineZin(cx.Zterm,cx.Z0,cx.len*i/48,f,f,cx.loss),cx.Z0), kind:'probe'});
+    return hs;
+  },
+  onDrag:(kind,G)=>{
+    const cx=lineContext();
+    if(kind==='probe') return setProbeToGamma(G);
+    const Zt=zOfGamma(G,cx.Z0);
+    setLoadZ(cx.adhoc ? Zt : uncascadeZ(S.net.slice(cx.idx+1), Zt, S.f0, S.f0));
+  },
+});
+wavePlot.owner=drawLine; zPlot.owner=drawLine;
+
+const reduced=(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)||false;
+if(reduced) $('#anim').checked=false;
+(function loop(){
+  if($('#view-line').classList.contains('on')){
+    let need=false;
+    if(walking){
+      let pos=(+$('#lpos').value||0)+0.0016; if(pos>1) pos-=1;
+      $('#lpos').value=pos; need=true;
+    }
+    if($('#anim').checked){ phase=(phase+0.05)%TAU; need=true; }
+    if(need){ drawLine(); if(walking) drawBench(); }
+  }
+  requestAnimationFrame(loop);
+})();
+
+/* ======================= FREQUENCY SWEEP ================================= */
+const sweepPlot=new Plot($('#sweepPlot'));
+let sweepData=[];
+const smithSweep=new Smith($('#smithSweep'),{square:true,pad:20,labels:false,ruler:false,inset:16});
+function drawSweep(){
+  const mult=+$('#gfu').value, f1=(+$('#f1').value||.5)*mult, f2=(+$('#f2').value||2)*mult;
+  const N=Math.max(21,Math.min(2001,+$('#npts').value||401));
+  const goal=+$('#rlTarget').value||10, useSWR=$('#swVSWR').checked;
+  const data=[];
+  for(let i=0;i<N;i++){
+    const f=f1+(f2-f1)*i/(N-1);
+    const Z=cascadeZ(S.net, loadZ(S.load,f), f, S.f0);
+    const g=Math.min(C.abs(gammaOf(Z,S.Z0)),1);
+    data.push({f, g, rl:rlOf(g), swr:vswrOf(Math.min(g,.999999)), Z});
+  }
+  sweepData=data;
+  const markF=f1+(f2-f1)*(+$('#fmark').value||0);
+  const mk=data.reduce((a,b)=>Math.abs(b.f-markF)<Math.abs(a.f-markF)?b:a, data[0]);
+  $('#fmarkV').textContent=fStr(mk.f);
+  $('#sweepWarn').textContent = S.load.mode==='fixed'
+    ? 'Load model is “Fixed Z”, so the load itself does not change with frequency — only the network does. Switch to an R–L–C model for a physical sweep.'
+    : '';
+  sweepPlot.fit();
+  sweepPlot.axes({x0:f1,x1:f2,y0:useSWR?1:-40,y1:useSWR?10:0,
+    xlabel:`frequency (${mult===1e9?'GHz':mult===1e6?'MHz':'kHz'})`,
+    ylabel: useSWR?'VSWR':'return loss (dB)',
+    xfmt:v=>sig(v/mult,3), yfmt:v=>v.toFixed(0),
+    title: useSWR?'VSWR vs frequency':'|S₁₁| vs frequency', yticks:useSWR?9:8});
+  const yOf=(d)=>useSWR?Math.min(d.swr,10):-Math.min(d.rl,40);
+  if(!useSWR){
+    sweepPlot.band(data.map(d=>[d.f, -Math.min(d.rl,40), -40]),'rgba(194,233,75,.09)');
+    sweepPlot.hline(-goal,'#8a6bd1');
+  } else sweepPlot.hline(2,'#8a6bd1');
+  sweepPlot.line(data.map(d=>[d.f,yOf(d)]),'#c2e94b',2.2);
+  if(S.f0>=f1&&S.f0<=f2) sweepPlot.vline(S.f0,'#ffb020','f₀');
+  sweepPlot.vline(mk.f,'#8a6bd1','marker',[1,3]);
+  sweepPlot.dot(mk.f,yOf(mk),'#8a6bd1',4.5);
+  let best=data[0]; data.forEach(d=>{if(d.g<best.g) best=d;});
+  const iBest=data.indexOf(best); let lo=iBest, hi=iBest;
+  while(lo>0 && data[lo-1].rl>=goal) lo--;
+  while(hi<data.length-1 && data[hi+1].rl>=goal) hi++;
+  const bw = best.rl>=goal ? data[hi].f-data[lo].f : 0;
+  if(bw>0){ sweepPlot.dot(data[lo].f,yOf(data[lo]),'#8a6bd1',3.5);
+            sweepPlot.dot(data[hi].f,yOf(data[hi]),'#8a6bd1',3.5); }
+  const at0=cascadeZ(S.net, loadZ(S.load,S.f0), S.f0, S.f0);
+  const g0=Math.min(C.abs(gammaOf(at0,S.Z0)),1);
+  ro($('#sro'),[
+    {k:`RL at f₀ = ${fStr(S.f0)}`, v:`${rlOf(g0)===Infinity?'∞':rlOf(g0).toFixed(1)} <small>dB</small>`, cls:swrClass(vswrOf(g0))},
+    {k:`marker ${fStr(mk.f)}`, v:`${mk.rl===Infinity?'∞':mk.rl.toFixed(1)} <small>dB · VSWR ${mk.swr.toFixed(2)}</small>`, cls:swrClass(mk.swr)},
+    {k:'Z at marker', v:`${zStr(mk.Z)} Ω`},
+    {k:'Best RL in band', v:`${best.rl===Infinity?'∞':best.rl.toFixed(1)} <small>dB @ ${fStr(best.f)}</small>`},
+    {k:`Bandwidth ≥ ${goal} dB`, v: bw>0?`${fStr(bw)} <small>(${(100*bw/best.f).toFixed(1)} %)</small>`:'none'},
+  ]);
+  smithSweep.overlays=(ch)=>{
+    ch.grid({z:true,y:false,ruler:false});
+    ch.trace(data.map(d=>gammaOf(d.Z,S.Z0)),'#c2e94b',2.2);
+    ch.dot(gammaOf(at0,S.Z0),'#ffb020','circle');
+    ch.dot(gammaOf(mk.Z,S.Z0),'#8a6bd1','circle');
+  };
+  smithSweep.draw();
+}
+attachChart(smithSweep,{
+  def:'input',
+  handles:()=>{
+    if(!sweepData.length) return [];
+    const at0=cascadeZ(S.net, loadZ(S.load,S.f0), S.f0, S.f0);
+    const hs=[{g:gammaOf(at0,S.Z0), kind:'input'}];
+    const step=Math.max(1,Math.floor(sweepData.length/60));
+    for(let i=0;i<sweepData.length;i+=step) hs.push({g:gammaOf(sweepData[i].Z,S.Z0), kind:'marker'});
+    return hs;
+  },
+  onDrag:(kind,G)=>{
+    if(kind==='marker'){
+      let bi=0, bd=1e9;
+      sweepData.forEach((d,i)=>{const dd=C.abs(C.sub(gammaOf(d.Z,S.Z0),G)); if(dd<bd){bd=dd;bi=i;}});
+      $('#fmark').value = sweepData.length>1 ? bi/(sweepData.length-1) : 0;
+      drawSweep(); return;
+    }
+    setLoadZ(uncascadeZ(S.net, zOfGamma(G,S.Z0), S.f0, S.f0));
+  },
+});
+$('#setF0').addEventListener('click',()=>{
+  const mult=+$('#gfu').value, f1=(+$('#f1').value||.5)*mult, f2=(+$('#f2').value||2)*mult;
+  $('#gf').value=+(((f1+(f2-f1)*(+$('#fmark').value||0))/mult).toFixed(6));
+  readGlobals(); refresh();
+});
+$('#sweepPlot').addEventListener('pointerdown',e=>{
+  const r=e.currentTarget.getBoundingClientRect();
+  const u=(e.clientX-r.left-sweepPlot.pl)/(sweepPlot.pr-sweepPlot.pl);
+  if(u>=0&&u<=1){ $('#fmark').value=u; drawSweep(); }
+});
+['f1','f2','npts','rlTarget','swVSWR','fmark'].forEach(id=>$('#'+id).addEventListener('input',drawSweep));
+sweepPlot.owner=drawSweep;
+
+/* ======================= LEARN CARDS ===================================== */
+const CARDS=[
+ ['Γ is just a ratio of two travelling waves',`
+  <p>Send a wave down a line and part of it comes back. The reflection coefficient is the
+  complex ratio of the returning wave to the outgoing one at the same plane:
+  <code>Γ = (Z − Z₀)/(Z + Z₀)</code>, and inverting it gives <code>Z = Z₀(1+Γ)/(1−Γ)</code>.</p>
+  <p>Three anchors are worth memorising: <span class="key">Γ = 0</span> at the centre (matched),
+  <span class="key">Γ = +1</span> at the far right (open), <span class="key">Γ = −1</span> at the far
+  left (short). Everything else lives between them, and for a passive load <code>|Γ| ≤ 1</code>.</p>`],
+ ['The point on the chart <em>is</em> the two waves',`
+  <p>At any plane on a line there are exactly two travelling waves, and Γ at that plane is their
+  ratio: <code>Γ(d) = V⁻/V⁺</code>. That is all the chart ever shows. On the Line tab the phasor
+  panel draws the same instant three ways — the red arrow is V⁺, the cyan arrow hung off its tip is
+  V⁻, and the green arrow closing the triangle is what a probe would measure. The angle between red
+  and cyan is <code>∠Γ(d)</code>, and the cyan tip rides a circle of radius <code>|Γ|</code>: the
+  constant-VSWR circle, drawn in a different coordinate system.</p>
+  <p>Walk toward the source and the forward wave gains phase while the reflected one loses it, so
+  their <em>relative</em> angle changes at twice the rate — <span class="key">720° of rotation per
+  wavelength</span> of line. Arrows aligned means a voltage maximum and Γ on the right-hand real
+  axis, where <code>Z = Z₀·VSWR</code>. Arrows opposed means a minimum, Γ on the left-hand real
+  axis, <code>Z = Z₀/VSWR</code>. Everything else on the chart is a partial cancellation.</p>`],
+ ['Why the grid bends the way it does',`
+  <p>The chart is the map <code>z ↦ (z−1)/(z+1)</code> applied to the right half of the impedance
+  plane. That transform is conformal: straight lines become circles, and the infinite half-plane
+  is squeezed into a unit disc. Vertical lines of constant <span class="zc">resistance</span> become
+  circles tangent to the right edge; horizontal lines of constant <span class="zc">reactance</span>
+  become arcs radiating from that same point.</p>
+  <p>Values are normalised: <code>z = Z/Z₀</code>. Change Z₀ in the header and every point moves,
+  because the same physical load has a different normalised value.</p>`],
+ ['Two grids, two kinds of motion',`
+  <p>A <span class="zc">series</span> element adds reactance, so it slides the point along a
+  <span class="zc">constant-resistance circle</span>. A <span class="yc">shunt</span> element adds
+  susceptance, so it slides along a <span class="yc">constant-conductance circle</span> — which is
+  the impedance grid rotated 180°.</p>
+  <p>Direction is fixed by physics: inductors move clockwise, capacitors counter-clockwise, on
+  whichever grid applies. Hover a part in the network list and the matching grid lights up.</p>`],
+ ['Walking down a line = rotating',`
+  <p>Moving the reference plane away from the load by a distance <em>d</em> multiplies Γ by
+  <code>e^(−j2βd)</code>: pure rotation, clockwise, at constant radius on a lossless line.</p>
+  <p>Two consequences you will use constantly: a <span class="key">λ/2</span> line brings you all the
+  way round, so it repeats the load exactly at any Z₀; and a <span class="key">λ/4</span> line
+  half-turns you to the opposite side, giving the inverter
+  <code>Z<sub>in</sub> = Z₀²/Z<sub>L</sub></code> — the basis of the quarter-wave transformer,
+  and the reason a shorted quarter-wave stub looks like an open circuit.</p>`],
+ ['Standing waves, VSWR, and what a slotted line sees',`
+  <p>Forward and reflected waves interfere along the line. Where they add you get
+  <code>|V|max = |V⁺|(1+|Γ|)</code>; where they cancel, <code>|V|min = |V⁺|(1−|Γ|)</code>. The ratio
+  is the VSWR, <code>(1+|Γ|)/(1−|Γ|)</code>. The pattern repeats every <span class="key">λ/2</span>,
+  which is why voltage maxima are half a wavelength apart while the electrical rotation is a
+  full turn.</p>
+  <p>Voltage maxima sit where the impedance is real and high (right-hand real axis); minima where
+  it is real and low. That is how you locate an unknown load with nothing but a probe and a ruler.</p>`],
+ ['L-networks: two parts, forbidden regions',`
+  <p>Two reactances can match any load, but only some topologies work for a given one. Adding a
+  shunt part first requires the load to sit inside the <code>g = 1</code> circle; series-first
+  requires it inside the <code>r = 1</code> circle. Loads inside both give four solutions, and the
+  solver lists all of them.</p>
+  <p>The working Q of an L-match is set by the impedance ratio,
+  <code>Q = √(R<sub>high</sub>/R<sub>low</sub> − 1)</code> — you do not get to choose it. Turn on the
+  Q arcs to see how far the trace bulges: the further out, the narrower the match. Check it on the
+  Frequency tab; a big transformation ratio always buys you a narrow band.</p>`],
+ ['Single-stub matching, as a recipe',`
+  <p>Work in admittance. First run a length of line from the load until the normalised conductance
+  becomes 1 — you land on the <span class="yc">g = 1</span> circle, with some leftover susceptance
+  <code>jb</code>. Then hang a shunt stub there whose susceptance is exactly <code>−jb</code>.
+  A shorted stub gives <code>−j·cot(βl)</code>, an open one <code>+j·tan(βl)</code>.</p>
+  <p>There are always two crossings of the g = 1 circle per half wavelength, so you get two answers;
+  the shorter line is usually the wider-band one. Nothing but line is needed, which is why this is
+  the default at microwave frequencies where lumped parts stop behaving.</p>`],
+ ['Loss turns the circle into a spiral',`
+  <p>With attenuation, rotation still happens but the radius shrinks as <code>e^(−2αd)</code>. Long
+  lossy cable makes any load look matched at the input — a well-known trap when measuring an antenna
+  through a long run. Set the loss field on the Line tab and watch the spiral wind inward.</p>
+  <p>Note the asymmetry: loss improves the <em>measured</em> VSWR while making the actual delivered
+  power worse.</p>`],
+ ['What this model does not include',`
+  <p>Lumped parts here are ideal: no ESR, no parasitic inductance, no self-resonance, so a capacitor
+  stays capacitive forever. Real 0402 parts stop cooperating well before 10 GHz.</p>
+  <p>Lines are ideal TEM with frequency-flat Z₀ and no dispersion, and stubs have no discontinuity
+  or junction capacitance. Treat the result as the starting point you then hand to an EM solver.</p>`],
+];
+$('#learnCards').innerHTML = CARDS.map(([t,b],i)=>
+  `<details class="learn" ${i===0?'open':''}><summary>${t}</summary><div class="body">${b}</div></details>`).join('');
+
+/* ======================= STUB DRILL ====================================== */
+const smithGame=new Smith($('#smithGame'),{square:true,pad:20,labels:false,ruler:true,inset:16});
+let gameZ=C.c(100,-50);
+function newGame(){
+  const R=Math.exp(Math.log(5)+Math.random()*Math.log(240/5));
+  const X=(Math.random()*2-1)*140;
+  gameZ=C.c(+R.toFixed(1), +X.toFixed(1));
+  $('#gd').value=0.1; $('#gl').value=0.1; drawGame();
+}
+function drawGame(){
+  const Z0=S.Z0, f=S.f0, d=+$('#gd').value, l=+$('#gl').value, open=$('#gtype').value==='so';
+  $('#gdV').textContent=`${d.toFixed(3)} λ`; $('#glV').textContent=`${l.toFixed(3)} λ`;
+  $('#gameLoad').innerHTML=`Match <span class="mono key">Z<sub>L</sub> = ${zStr(gameZ)} Ω</span> to ${Z0} Ω using line + one shunt stub. Slide until the trace lands dead centre.`;
+  const Zd=lineZin(gameZ,Z0,d,f,f,0);
+  const Zs=stubZ(open,Z0,l,f,f,0);
+  const Zin=C.par(Zd,Zs);
+  const g=Math.min(C.abs(gammaOf(Zin,Z0)),1), rl=rlOf(g);
+  ro($('#gro'),[
+    {k:'Return loss', v:`${rl===Infinity?'∞':rl.toFixed(1)} <small>dB</small>`, cls: rl>20?'ok':rl>10?'warn':'bad'},
+    {k:'VSWR', v:vswrOf(Math.min(g,.999999)).toFixed(2), cls:swrClass(vswrOf(Math.min(g,.999999)))},
+    {k:'Z in', v:`${zStr(Zin)} Ω`},
+  ]);
+  smithGame.overlays=(ch)=>{
+    ch.grid({z:false,y:true});
+    const arc=[]; for(let i=0;i<=120;i++) arc.push(gammaOf(lineZin(gameZ,Z0,d*i/120,f,f,0),Z0));
+    ch.trace(arc,'#c2e94b',2.2);
+    const Bs=C.inv(Zs).im, arc2=[];
+    for(let i=0;i<=60;i++) arc2.push(gammaOf(C.inv(C.add(C.inv(Zd),C.c(0,Bs*i/60))),Z0));
+    ch.trace(arc2,'#37b6cc',2.4);
+    ch.gCircle(1,'#37b6cc',1.6,.85);
+    ch.dot(gammaOf(gameZ,Z0),'#ffb020','diamond');
+    ch.dot(gammaOf(Zin,Z0),'#c2e94b','circle');
+  };
+  smithGame.draw();
+}
+attachChart(smithGame,{
+  def:'load',
+  handles:()=>[{g:gammaOf(gameZ,S.Z0), kind:'load'}],
+  onDrag:(k,G)=>{ const Z=zOfGamma(G,S.Z0);
+    gameZ=C.c(+Math.max(Z.re,.1).toFixed(1), +Z.im.toFixed(1)); drawGame(); },
+});
+['gd','gl','gtype'].forEach(id=>$('#'+id).addEventListener('input',drawGame));
+$('#gNew').addEventListener('click',newGame);
+$('#gSend').addEventListener('click',()=>{
+  $('#lmode').value='fixed'; $('#la').value=gameZ.re.toFixed(2); $('#lb').value=gameZ.im.toFixed(2);
+  syncLoadUI(); readGlobals();
+  S.net=[{...mkEl($('#gtype').value), v:+$('#gl').value, z0:S.Z0},
+         {...mkEl('tl'), v:+$('#gd').value, z0:S.Z0}];
+  renderCascade(); refresh(); goTab('bench');
+});
+$('#gSolve').addEventListener('click',()=>{
+  const open=$('#gtype').value==='so';
+  const s=solveStub(gameZ,S.Z0,S.f0,open)[0];
+  if(!s) return;
+  $('#gd').value=s.d.toFixed(3); $('#gl').value=s.l.toFixed(3); drawGame();
+});
+
+/* ======================= SELF-TEST ======================================= */
+function runTests(){
+  const f=1e9, Z0=50, rows=[];
+  const grp=(t)=>rows.push({grp:t});
+  const push=(name,exp,got,tol=1e-6,fmt)=>{
+    const num=typeof exp==='number';
+    const err=num?Math.abs(got-exp):Math.hypot(got.re-exp.re,got.im-exp.im);
+    const F=fmt||(num?(v=>sig(v,6)):zStr);
+    rows.push({name, exp:F(exp), got:F(got), err, ok:err<tol});
+  };
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const randEl=(kinds,lossy)=>{
+    const t=kinds[Math.floor(Math.random()*kinds.length)], e=mkEl(t);
+    e.v = LIB[t].kind==='dist'||LIB[t].dist ? rnd(.01,.6)
+        : t.endsWith('R') ? rnd(5,300) : rnd(.2,20);
+    e.z0=rnd(25,110); e.loss=lossy?rnd(0,2):0; return e;
+  };
+  const randNet=(n,kinds,lossy)=>Array.from({length:n},()=>randEl(kinds,lossy));
+  const ALL=['sL','sC','sR','pL','pC','pR','tl','so','ss'];
+  const LOSSLESS=['sL','sC','pL','pC','tl','so','ss'];
+  const randZ=()=>C.c(rnd(1,300),rnd(-200,200));
+
+  grp('Closed-form landmarks');
+  push('λ/4 of √(50·100) into 100 Ω', C.c(50,0), lineZin(C.c(100,0),Math.sqrt(5000),.25,f,f,0),1e-8);
+  push('λ/4 inverter: 25 Ω → 100 Ω', C.c(100,0), lineZin(C.c(25,0),50,.25,f,f,0),1e-8);
+  push('λ/2 line repeats 25+j40 Ω', C.c(25,40), lineZin(C.c(25,40),50,.5,f,f,0));
+  push('shorted λ/8 stub = +j50 Ω', C.c(0,50), stubZ(false,50,.125,f,f,0));
+  push('open λ/8 stub = −j50 Ω', C.c(0,-50), stubZ(true,50,.125,f,f,0),1e-4);
+  push('open λ/4 stub is a short', C.c(0,0), stubZ(true,50,.25,f,f,0));
+  push('shorted stub Y = −j·Y₀·cot βl', C.c(0,-Math.tan(Math.PI/2-2*Math.PI*.17)/50),
+    C.inv(stubZ(false,50,.17,f,f,0)),1e-9);
+  push('open stub Y = +j·Y₀·tan βl', C.c(0,Math.tan(2*Math.PI*.17)/50),
+    C.inv(stubZ(true,50,.17,f,f,0)),1e-9);
+  push('5 nH in series with 50 Ω', C.c(50,2*Math.PI*f*5e-9), applyEl({t:'sL',v:5},C.c(50,0),f,f),1e-9);
+  push('2 pF shunting 50 Ω', C.inv(C.c(.02,2*Math.PI*f*2e-12)), applyEl({t:'pC',v:2},C.c(50,0),f,f),1e-9);
+  push('VSWR 2 ⇒ |Γ| = 1/3', 1/3, (vswrOf(1/3)-1)/(vswrOf(1/3)+1),1e-12);
+
+  grp('Impedance folding vs. ABCD matrices — two independent engines');
+  {const net=[mkEl('sL'),mkEl('pC'),mkEl('tl'),mkEl('ss')], ZL=C.c(35,-60);
+   push('4-part network at f₀', cascadeZ(net,ZL,f,f), zinABCD(abcdNet(net,f,f),ZL),1e-9);
+   push('same network at 1.7 f₀', cascadeZ(net,ZL,1.7*f,f), zinABCD(abcdNet(net,1.7*f,f),ZL),1e-9);}
+  {let worst=0;
+   for(let k=0;k<300;k++){
+     const net=randNet(1+Math.floor(Math.random()*5),ALL,Math.random()<.5), ZL=randZ();
+     const ff=f*rnd(.3,3), a=cascadeZ(net,ZL,ff,f), b=zinABCD(abcdNet(net,ff,f),ZL);
+     worst=Math.max(worst, C.abs(C.sub(a,b))/Math.max(C.abs(a),1));
+   }
+   push('300 random networks, worst relative ΔZin', 0, worst, 1e-9);}
+  {let worst=0;
+   for(let k=0;k<200;k++){
+     const net=randNet(1+Math.floor(Math.random()*4),ALL,false), ff=f*rnd(.5,2);
+     const s11=sParams(abcdNet(net,ff,f),Z0).s11;
+     worst=Math.max(worst, C.abs(C.sub(s11, gammaOf(cascadeZ(net,C.c(Z0,0),ff,f),Z0))));
+   }
+   push('S₁₁ from ABCD vs Γ of Z₀-terminated net', 0, worst, 1e-9);}
+
+  {let worst=0;
+   for(let k=0;k<300;k++){
+     const net=randNet(1+Math.floor(Math.random()*5),ALL,Math.random()<.5), ZL=randZ(), ff=f*rnd(.3,3);
+     const back=uncascadeZ(net, cascadeZ(net,ZL,ff,f), ff, f);
+     worst=Math.max(worst, C.abs(C.sub(back,ZL))/C.abs(ZL));
+   }
+   push('uncascade(cascade(Z)) = Z, 300 networks', 0, worst, 1e-7);}
+
+  grp('Physics invariants');
+  {let worst=0;
+   for(let k=0;k<300;k++){
+     const M=abcdNet(randNet(1+Math.floor(Math.random()*5),ALL,Math.random()<.5),f*rnd(.3,3),f);
+     worst=Math.max(worst, C.abs(C.sub(detABCD(M),C.c(1,0))));
+   }
+   push('reciprocity: |AD − BC − 1| over 300 networks', 0, worst, 1e-9);}
+  {let worst=0;
+   for(let k=0;k<300;k++){
+     const M=abcdNet(randNet(1+Math.floor(Math.random()*5),LOSSLESS,false),f*rnd(.3,3),f);
+     const {s11,s21}=sParams(M,Z0);
+     worst=Math.max(worst, Math.abs(C.abs(s11)**2+C.abs(s21)**2-1));
+   }
+   push('lossless: |S₁₁|² + |S₂₁|² − 1', 0, worst, 1e-6);}
+  {let worst=0;
+   for(let k=0;k<400;k++){
+     const net=randNet(1+Math.floor(Math.random()*5),ALL,Math.random()<.5);
+     const ZL=C.c(rnd(0.1,400),rnd(-300,300));
+     worst=Math.max(worst, C.abs(gammaOf(cascadeZ(net,ZL,f*rnd(.3,3),f),Z0)));
+   }
+   push(`passivity: worst |Γ| = ${sig(worst,6)}, must not exceed 1`, 0,
+     Math.max(0,worst-1), 1e-9);}
+  {const a=1.7, d=.42, gl=C.abs(gammaOf(C.c(20,35),50));
+   push('lossy line: |Γ(d)| = |Γ_L|·e^(−2αd)', gl*Math.exp(-2*a*d/DB_NP),
+     C.abs(gammaOf(lineZin(C.c(20,35),50,d,f,f,a),50)),1e-12);}
+  push('|Γ| unchanged by lossless line', C.abs(gammaOf(C.c(20,35),50)),
+    C.abs(gammaOf(lineZin(C.c(20,35),50,.137,f,f,0),50)),1e-12);
+
+  grp('Travelling waves vs. impedance');
+  {let worst=0; const ZL=C.c(18,-44);
+   for(const loss of [0,1.3]) for(let i=0;i<=40;i++){
+     const d=i/40*1.3, w=waveAt(ZL,50,d,loss), z=lineZin(ZL,50,d,f,f,loss);
+     worst=Math.max(worst, C.abs(C.sub(C.div(w.V,w.I),z))/Math.max(C.abs(z),1));
+   }
+   push('V(d)/I(d) = Zin(d), lossless and lossy', 0, worst, 1e-9);}
+  {const ZL=C.c(120,55), g=C.abs(gammaOf(ZL,50)); let mx=0,mn=1e9;
+   for(let i=0;i<=4000;i++){const v=C.abs(waveAt(ZL,50,i/4000*.5,0).V); mx=Math.max(mx,v); mn=Math.min(mn,v);}
+   push('|V|max = 1 + |Γ|', 1+g, mx, 1e-6);
+   push('|V|min = 1 − |Γ|', 1-g, mn, 1e-6);}
+  {const ZL=C.c(120,55), gL=gammaOf(ZL,50);
+   const dPred=((C.arg(gL)%(2*Math.PI))+2*Math.PI)%(2*Math.PI)/(4*Math.PI);
+   let dBest=0,vBest=0;
+   for(let i=0;i<=20000;i++){const d=i/20000*.5, v=C.abs(waveAt(ZL,50,d,0).V); if(v>vBest){vBest=v;dBest=d;}}
+   push('first V max at ∠Γ_L/(4π) wavelengths', dPred, dBest, 1e-4);}
+  {const ZL=C.c(18,-44), g=C.abs(gammaOf(ZL,50)); let worst=0;
+   for(let i=0;i<=50;i++){const w=waveAt(ZL,50,i/50*1.1,0);
+     const P=(C.mul(w.V,C.c(w.I.re,-w.I.im)).re)/2;
+     worst=Math.max(worst,Math.abs(P-(1-g*g)/(2*50)));}
+   push('power ½Re{V·I*} constant on a lossless line', 0, worst, 1e-12);}
+
+  grp('Matching solvers — round trip through the network');
+  {const ZL=C.c(25,-30);
+   solveL(ZL,Z0,f).forEach((s,i)=>push(`L-match #${i+1}: ${s.label}`, 0,
+     C.abs(gammaOf(cascadeZ(s.net,ZL,f,f),Z0)),1e-9));}
+  {const ZL=C.c(100,-50);
+   [[false,'shorted'],[true,'open']].forEach(([o,n])=>solveStub(ZL,Z0,f,o).forEach((s,i)=>{
+     const net=[{...mkEl(o?'so':'ss'),v:s.l,z0:Z0},{...mkEl('tl'),v:s.d,z0:Z0}];
+     push(`${n} stub #${i+1} (d=${s.d.toFixed(3)}λ, l=${s.l.toFixed(3)}λ)`, 0,
+       C.abs(gammaOf(cascadeZ(net,ZL,f,f),Z0)),1e-6);}));}
+  {const ZL=C.c(25,40); solveQW(ZL,Z0,f).forEach((s,i)=>{
+     const net=[{...mkEl('tl'),v:.25,z0:s.Zq},{...mkEl('tl'),v:s.d,z0:Z0}];
+     push(`λ/4 transformer #${i+1} (Z₀=${s.Zq.toFixed(1)} Ω)`, 0,
+       C.abs(gammaOf(cascadeZ(net,ZL,f,f),Z0)),1e-6);});}
+  {let worst=0;
+   for(let k=0;k<200;k++){
+     const ZL=C.c(rnd(2,300),rnd(-250,250));
+     solveL(ZL,Z0,f).forEach(s=>worst=Math.max(worst,C.abs(gammaOf(cascadeZ(s.net,ZL,f,f),Z0))));
+     solveStub(ZL,Z0,f,Math.random()<.5).forEach(s=>{});
+   }
+   push('200 random loads, worst |Γ| after L-match', 0, worst, 1e-9);}
+
+  grp('Chart geometry');
+  {let worst=0;
+   for(const r of [.2,.5,1,2,5]) for(let i=0;i<100;i++){
+     const g=gammaOf(C.c(r*50, rnd(-2000,2000)),50);
+     worst=Math.max(worst, Math.abs(Math.hypot(g.re-r/(1+r), g.im)-1/(1+r)));
+   }
+   push('constant-r loci are circles at r/(1+r), radius 1/(1+r)', 0, worst, 1e-9);}
+  {let worst=0;
+   for(const x of [.2,.5,1,2,5]) for(let i=0;i<100;i++){
+     const g=gammaOf(C.c(rnd(.01,3000), x*50),50);
+     worst=Math.max(worst, Math.abs(Math.hypot(g.re-1, g.im-1/x)-1/Math.abs(x)));
+   }
+   push('constant-x loci are arcs at (1, 1/x), radius 1/|x|', 0, worst, 1e-9);}
+  {let worst=0;
+   for(let k=0;k<500;k++){const z=C.c(rnd(.1,500),rnd(-400,400));
+     worst=Math.max(worst, C.abs(C.sub(zOfGamma(gammaOf(z,50),50),z))/C.abs(z));}
+   push('Γ ⇄ Z round trip, 500 points', 0, worst, 1e-12);}
+  {let worst=0;
+   for(let k=0;k<200;k++){const g=C.c(rnd(-.9,.9),rnd(-.4,.4));
+     const [x,y]=smith.px(g), b=smith.fromPx(x,y);
+     worst=Math.max(worst,C.abs(C.sub(g,b)));}
+   push('chart pixel mapping round trip', 0, worst, 1e-9);}
+
+  const tests=rows.filter(r=>!r.grp), nFail=tests.filter(r=>!r.ok).length;
+  $('#testTable').querySelector('tbody').innerHTML = rows.map(r=>
+    r.grp ? `<tr class="grp"><td colspan="5">${r.grp}</td></tr>`
+    : `<tr><td>${r.name}</td><td>${r.exp}</td><td>${r.got}</td><td>${r.err.toExponential(1)}</td>
+       <td><span class="pill ${r.ok?'pass':'fail'}">${r.ok?'pass':'fail'}</span></td></tr>`).join('')
+    + `<tr><td colspan="5" style="color:${nFail?'var(--bad)':'var(--good)'}">${tests.length-nFail}/${tests.length} passing</td></tr>`;
+  return {n:tests.length, fail:nFail};
+}
+
+/* ======================= INIT ============================================ */
+syncLoadUI(); readGlobals(); renderCascade(); newGame();
+refresh(); drawLine(); drawSweep(); runTests();
+window.addEventListener('resize',()=>{drawBench();drawLine();drawSweep();drawGame();});
+</script>
+</body>
+</html>

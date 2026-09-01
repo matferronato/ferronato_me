@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retarded Field Bench — moving charges and their fields</title>
+<link rel="stylesheet" href="static/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="eyebrow">Retarded field bench</span>
+    <h1>Nothing in a field travels faster than <em>c</em></h1>
+  </div>
+  <div class="transport">
+    <span id="simClock" class="chip mono">t 0.00 s</span>
+    <span id="fpsChip" class="chip mono">— fps</span>
+    <span id="resChip" class="chip mono">field —</span>
+    <button id="stepBtn" title="Step one frame (S)">Step</button>
+    <button id="resetBtn" title="Reload the experiment (R)">Reset</button>
+    <button id="playBtn" class="primary" title="Play / pause (Space)">Play</button>
+  </div>
+</header>
+
+<div id="glError" class="banner hidden"></div>
+
+<main class="workspace">
+
+  <!-- ------------------------------------------------ left: experiment -->
+  <aside class="panel">
+    <section class="block">
+      <h2>Experiment</h2>
+      <label class="field">
+        <span>Scenario</span>
+        <select id="scenarioSelect"></select>
+      </label>
+      <p id="scenarioBlurb" class="blurb"></p>
+      <div class="pair">
+        <button id="addPos" class="tint-pos">Add +</button>
+        <button id="addNeg" class="tint-neg">Add −</button>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Motion &amp; coupling</h2>
+      <label class="slider"><span>Speed of light <em id="cOut" class="mono">2.4 u/s</em></span>
+        <input id="cSpeed" type="range" min="1" max="8" step="0.1" value="2.4" />
+      </label>
+      <label class="slider"><span>Time scale <em id="timeScaleOut" class="mono">1.00×</em></span>
+        <input id="timeScale" type="range" min="0.1" max="3" step="0.05" value="1" />
+      </label>
+      <label class="slider"><span>Force on free charges <em id="gainOut" class="mono">1.00×</em></span>
+        <input id="gain" type="range" min="0" max="12" step="0.1" value="1" />
+      </label>
+      <label class="slider"><span>Radiation reaction &tau; <em id="radReactOut" class="mono">off</em></span>
+        <input id="radReact" type="range" min="0" max="0.3" step="0.005" value="0" />
+      </label>
+      <div id="paramStrip" class="param-strip"></div>
+      <p class="note">Free charges are pushed by <em>q</em>(E + v×B) read at the retarded time, so a push arrives only after the wave does.</p>
+    </section>
+
+    <section class="block">
+      <h2>Performance</h2>
+      <label class="field">
+        <span>Retarded-time accuracy</span>
+        <select id="accuracy">
+          <option value="1">1 pass — fastest</option>
+          <option value="2" selected>2 passes — balanced</option>
+          <option value="3">3 passes — precise</option>
+        </select>
+      </label>
+      <label class="slider"><span>Field resolution <em id="resOut" class="mono">70%</em></span>
+        <input id="resScale" type="range" min="30" max="100" step="5" value="70" />
+      </label>
+      <label class="check"><input id="autoRes" type="checkbox" checked /><span>Adjust resolution to hold 60 fps</span></label>
+      <p class="note">The field is solved per pixel on the GPU at this fraction of canvas resolution, then upsampled. Field lines, arrows and grid are drawn at full resolution either way.</p>
+    </section>
+  </aside>
+
+  <!-- ------------------------------------------------------ centre: stage -->
+  <section class="stage-card">
+    <div class="stage-toolbar">
+      <div class="modes" role="group" aria-label="Field quantity">
+        <button data-mode="total" class="active">Total E</button>
+        <button data-mode="near">Near field</button>
+        <button data-mode="radiation">Radiation</button>
+        <button data-mode="disturbance">ΔE</button>
+        <button data-mode="magnetic">B</button>
+        <button data-mode="potential">&phi;</button>
+      </div>
+      <div class="zoom">
+        <button id="zoomOut" class="icon">−</button>
+        <button id="zoomReset" class="icon wide mono"><span id="zoomLabel">100%</span></button>
+        <button id="zoomIn" class="icon">+</button>
+      </div>
+    </div>
+
+    <div id="stage" class="stage">
+      <canvas id="glCanvas"></canvas>
+      <canvas id="overlay"></canvas>
+      <div id="tooltip" class="tooltip hidden"></div>
+    </div>
+
+    <p id="modeLegend" class="legend"></p>
+
+    <div class="stage-controls">
+      <label class="slider"><span>Brightness <em id="exposureOut" class="mono">3.0</em></span>
+        <input id="exposure" type="range" min="0.5" max="12" step="0.1" value="3" />
+      </label>
+      <label class="slider"><span>Field lines <em id="licOut" class="mono">0.80</em></span>
+        <input id="licStrength" type="range" min="0" max="1" step="0.05" value="0.8" />
+      </label>
+      <label class="slider"><span>Vectors <em id="arrowOut" class="mono">off</em></span>
+        <input id="arrowDensity" type="range" min="0" max="48" step="2" value="0" />
+      </label>
+      <label class="slider" id="heightRow" hidden><span>Relief <em id="heightOut" class="mono">0.30</em></span>
+        <input id="surfHeight" type="range" min="0.02" max="1" step="0.01" value="0.3" />
+      </label>
+      <label class="slider" id="particleRow" hidden><span>Particle size <em id="particleOut" class="mono">1.00</em></span>
+        <input id="particleSize" type="range" min="0.3" max="2.6" step="0.05" value="1" />
+      </label>
+      <div class="checks">
+        <label class="check"><input id="view3d" type="checkbox" /><span>3D surface</span></label>
+        <label class="check"><input id="contourToggle" type="checkbox" checked /><span>Contours</span></label>
+        <label class="check"><input id="particleToggle" type="checkbox" checked /><span>Particles</span></label>
+        <label class="check"><input id="gridToggle" type="checkbox" /><span>Grid</span></label>
+        <label class="check"><input id="trailToggle" type="checkbox" checked /><span>Trails</span></label>
+        <label class="check"><input id="ringToggle" type="checkbox" checked /><span>Light cones</span></label>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <article><span>Probe</span><strong id="probePos" class="mono">—</strong></article>
+      <article><span>Total E</span><strong id="probeE" class="mono">—</strong></article>
+      <article><span>Radiated part</span><strong id="probeRad" class="mono">—</strong></article>
+      <article><span>B<sub>z</sub></span><strong id="probeB" class="mono">—</strong></article>
+    </div>
+    <section class="panel inline-panel">
+      <h2>Energy flux</h2>
+      <label class="check"><input id="fluxToggle" type="checkbox" /><span>Integrate E&times;B around a ring</span></label>
+      <label class="slider"><span>Ring radius <em id="fluxOut" class="mono">6.0</em></span>
+        <input id="fluxRadius" type="range" min="1.5" max="12" step="0.1" value="6" />
+      </label>
+      <div class="flux-body">
+        <canvas id="polar" class="polar"></canvas>
+        <dl class="readout-list">
+          <div><dt>P radiated</dt><dd id="fluxPower" class="mono">—</dd></div>
+          <div><dt>line integral</dt><dd id="fluxLine" class="mono">—</dd></div>
+          <div><dt>peak lobe</dt><dd id="fluxLobe" class="mono">—</dd></div>
+        </dl>
+      </div>
+      <p class="fineprint">Time-averaged. The polar plot is outward flux against angle; the dashed circle is zero.</p>
+    </section>
+
+    <section class="panel inline-panel">
+      <h2>Probes</h2>
+      <div class="row">
+        <button id="probeAdd">Place a probe</button>
+        <button id="probeClear">Clear</button>
+      </div>
+      <p id="probeHint" class="fineprint">Two probes at different distances let you measure c from the delay between them.</p>
+      <dl class="readout-list">
+        <div><dt>source</dt><dd id="cSource" class="mono">—</dd></div>
+        <div><dt>path difference</dt><dd id="cPath" class="mono">—</dd></div>
+        <div><dt>measured delay</dt><dd id="cDelay" class="mono">—</dd></div>
+        <div><dt>c from delay</dt><dd id="cMeasured" class="mono">—</dd></div>
+      </dl>
+    </section>
+
+    <p id="statusText" class="status">Wheel zooms · shift-drag pans · double-click adds a charge</p>
+  </section>
+
+  <!-- ------------------------------------------------- right: inspector -->
+  <aside class="panel">
+    <section class="block">
+      <div class="head-row">
+        <h2>Recorder</h2>
+        <span id="chartTitle" class="chip mono">—</span>
+      </div>
+      <canvas id="chart" class="chart"></canvas>
+      <div id="chartLegend" class="chart-legend"></div>
+    </section>
+
+    <section class="block">
+      <div class="head-row">
+        <h2>Charge</h2>
+        <div class="head-actions">
+          <span id="chargeId" class="chip mono">—</span>
+          <button id="deleteBtn" class="danger icon" disabled title="Delete (Del)">✕</button>
+        </div>
+      </div>
+
+      <p id="emptyInspector" class="empty">Click a charge to inspect it.</p>
+
+      <div id="chargeInspector" class="hidden">
+        <div class="badge-row"><span id="chargeBadge" class="badge mono">+1.0 q</span></div>
+        <label class="field"><span>Charge q</span><input id="chargeValue" type="number" step="0.1" min="-6" max="6" /></label>
+        <label class="field"><span>Motion</span>
+          <select id="motionMode">
+            <option value="static">Held still</option>
+            <option value="uniform">Constant velocity</option>
+            <option value="oscX">Oscillate horizontally</option>
+            <option value="oscY">Oscillate vertically</option>
+            <option value="circle">Circular</option>
+            <option value="dynamic">Free — driven by the field</option>
+          </select>
+        </label>
+        <div class="grid2">
+          <label class="field"><span>v<sub>x</sub></span><input id="velX" type="number" step="0.1" /></label>
+          <label class="field"><span>v<sub>y</sub></span><input id="velY" type="number" step="0.1" /></label>
+          <label class="field"><span>Amplitude x</span><input id="ampX" type="number" step="0.1" min="0" /></label>
+          <label class="field"><span>Amplitude y</span><input id="ampY" type="number" step="0.1" min="0" /></label>
+          <label class="field"><span>Frequency</span><input id="freq" type="number" step="0.02" min="0" max="3" /></label>
+          <label class="field"><span>Phase</span><input id="phase" type="number" step="0.1" /></label>
+          <label class="field"><span>Mass</span><input id="mass" type="number" step="0.1" min="0.1" /></label>
+          <label class="field"><span>Spring</span><input id="spring" type="number" step="0.1" min="0" /></label>
+          <label class="field"><span>Damping</span><input id="damping" type="number" step="0.05" min="0" /></label>
+        </div>
+        <label class="check"><input id="axisLock" type="checkbox" /><span>Confine to a horizontal wire</span></label>
+        <dl class="vitals mono">
+          <div><dt>position</dt><dd id="selPos">—</dd></div>
+          <div><dt>velocity</dt><dd id="selVel">—</dd></div>
+          <div><dt>acceleration</dt><dd id="selAcc">—</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>What the colours mean</h2>
+      <p class="note"><strong>Near field</strong> falls off as 1/R² and rides along with the charge. It carries no energy away.</p>
+      <p class="note"><strong>Radiation</strong> falls off as 1/R and exists only while the charge accelerates. Because it dies more slowly with distance, it is all that survives far away.</p>
+      <details>
+        <summary>The model</summary>
+        <div class="eq mono">E = E<sub>v</sub> + E<sub>a</sub></div>
+        <div class="eq mono small">E<sub>v</sub> ∝ (1−β²)(n−β) / κ³R²</div>
+        <div class="eq mono small">E<sub>a</sub> ∝ n×[(n−β)×β̇] / cκ³R</div>
+        <p class="note">Everything on the right is read at the retarded time t<sub>r</sub> solved from t<sub>r</sub> = t − |x − p(t<sub>r</sub>)|/c. A two-dimensional teaching model, not a Maxwell solver.</p>
+      </details>
+    </section>
+  </aside>
+</main>
+
+<script src="static/physics.js"></script>
+<script src="static/shaders.js"></script>
+<script src="static/glfield.js"></script>
+<script src="static/scenarios.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>

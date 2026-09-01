@@ -1,0 +1,2637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optics Bench — reflective surfaces &amp; ray tracing</title>
+<style>
+:root{
+  --ink:#080B10; --panel:#0C1119; --panel2:#111823; --rule:#1B2532;
+  --txt:#C3D2E2; --dim:#6F8194; --teal:#4ADEDE; --amber:#F2A93B; --pink:#FF5D8F;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--ink);color:var(--txt);font-family:var(--ui);font-size:13px;
+  display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;
+}
+button,input,select{font-family:inherit;font-size:12px;color:var(--txt)}
+button{background:var(--panel2);border:1px solid var(--rule);border-radius:3px;padding:5px 9px;cursor:pointer;transition:border-color .12s,color .12s}
+button:hover{border-color:#2E4055;color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:1px solid var(--teal);outline-offset:1px}
+button.on{border-color:var(--teal);color:var(--teal);background:#0E1C22}
+button.danger:hover{border-color:var(--pink);color:var(--pink)}
+
+/* ---------- header ---------- */
+.bar{
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:6px 12px;
+  min-height:46px;flex:none;
+  background:linear-gradient(180deg,#0E141C,#0A0F16);
+  border-bottom:1px solid var(--rule);box-shadow:0 1px 0 rgba(74,222,222,.06);
+}
+/* every control keeps its size: the bar wraps rather than squeezing anything to
+   nothing. .seg sets overflow:hidden, which zeroes its automatic minimum width,
+   so without this it is the one item that can and does collapse. */
+.bar>*{flex:none}
+.brand{display:flex;align-items:baseline;gap:8px;white-space:nowrap;padding-right:4px}
+.brand b{font-family:var(--mono);font-size:13px;letter-spacing:.14em;color:#EAF3FA;font-weight:600}
+.brand span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.sep{width:1px;height:22px;background:var(--rule);flex:none}
+.grp{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.seg{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--rule);padding:5px 11px}
+.seg button:last-child{border-right:0}
+.lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ck{display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--dim);white-space:nowrap}
+.ck:hover{color:var(--txt)}
+.ck input{accent-color:var(--teal);width:13px;height:13px}
+select{background:var(--panel2);border:1px solid var(--rule);border-radius:3px;padding:5px 6px}
+input[type=range]{accent-color:var(--teal);height:14px}
+#bounces{width:78px}
+#fadeLen{width:74px}
+#fadeLoss{width:62px}
+#fadeLenV,#fadeLossV{font-size:11px;color:var(--dim);min-width:40px}
+.mono{font-family:var(--mono)}
+
+/* ---------- layout ---------- */
+main{flex:1;display:grid;grid-template-columns:206px minmax(0,1fr) 268px;min-height:0}
+.rail{background:var(--panel);border-right:1px solid var(--rule);overflow-y:auto;overflow-x:hidden}
+.rail.right{border-right:0;border-left:1px solid var(--rule)}
+.rail::-webkit-scrollbar{width:8px}
+.rail::-webkit-scrollbar-thumb{background:#1A2432;border-radius:4px}
+.eyebrow{
+  position:sticky;top:0;z-index:2;background:var(--panel);
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
+  padding:10px 12px 7px;border-bottom:1px solid var(--rule);
+}
+.pad{padding:9px}
+
+/* shape library */
+#shapeGrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:9px}
+.shape{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 3px;color:var(--dim);line-height:1.1}
+.shape svg{width:30px;height:22px;color:var(--teal);opacity:.85}
+.shape span{font-size:10px;text-align:center}
+.shape:hover{color:#fff}
+.shape:hover svg{opacity:1}
+
+/* scene list */
+#sceneList{padding:6px 0 10px}
+.item{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;border-left:2px solid transparent}
+.item:hover{background:#101722}
+.item.on{background:#101A24;border-left-color:var(--pink)}
+.item .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.item .sub{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.item .x{background:none;border:0;color:#41546A;padding:0 3px;font-size:14px;line-height:1}
+.item .x:hover{color:var(--pink)}
+.empty{color:#54677C;font-size:11px;padding:14px 12px;line-height:1.55}
+
+/* stage */
+.stagewrap{position:relative;min-width:0;background:var(--ink)}
+#stage{width:100%;height:100%;display:block;touch-action:none}
+#measureOut{
+  position:absolute;left:14px;top:12px;font-family:var(--mono);font-size:11.5px;color:var(--amber);
+  background:rgba(8,11,16,.82);border:1px solid rgba(242,169,59,.28);border-radius:3px;
+  padding:5px 9px;opacity:0;transition:opacity .15s;pointer-events:none;max-width:70%;
+}
+#measureOut.on{opacity:1}
+#hint3{
+  position:absolute;right:14px;bottom:12px;font-size:11px;color:var(--dim);display:none;
+  background:rgba(8,11,16,.8);border:1px solid var(--rule);border-radius:3px;padding:5px 9px;pointer-events:none;
+}
+
+/* inspector */
+#inspector{padding:10px 12px 22px}
+.insp-h{margin-bottom:10px}
+.nm-in{width:100%;background:transparent;border:0;border-bottom:1px solid var(--rule);padding:3px 0 5px;font-size:14px;color:#EAF3FA}
+.nm-in:focus{border-bottom-color:var(--teal);outline:none}
+.div-l{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--rule)}
+.ctl{margin-bottom:9px}
+.ctl-h{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ctl-l{flex:1;font-size:11px;color:var(--dim)}
+.ctl-n{width:62px;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;padding:2px 4px;font-family:var(--mono);font-size:11px;text-align:right}
+.ctl-n:focus{border-color:var(--teal);outline:none}
+.ctl-u{width:14px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.ctl-r{width:100%}
+.ctl-s{width:150px}
+.ctl-c{width:40px;height:20px;padding:0;background:none;border:1px solid var(--rule);border-radius:2px}
+.rx{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+.rx .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.rx-n{flex:1;font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rx-c{font-family:var(--mono);font-size:10px;color:#7A8C9E}
+.rx-p{font-family:var(--mono);font-size:12px;color:#5BE0A0;min-width:48px;text-align:right}
+.rx-bar{width:100%;height:3px;background:#141C26;border-radius:2px;overflow:hidden}
+.rx-fill{height:100%;border-radius:2px;transition:width .12s}
+.derived{font-size:11px;line-height:1.55;color:#8CA3B8;background:#0A121A;border-left:2px solid var(--amber);padding:7px 9px;margin:10px 0 4px}
+.note{font-size:10.5px;line-height:1.5;color:#5E7183;margin:-2px 0 8px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+button.wide{width:100%;margin-top:6px}
+.cut{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.cut-i{font-family:var(--mono);font-size:10px;color:var(--dim);width:34px;flex:none}
+.cut input[type=range]{flex:1;min-width:0}
+.cut .x{background:none;border:0;color:#41546A;padding:0 2px;font-size:14px}
+.cut .x:hover{color:var(--pink)}
+
+/* footer */
+footer{
+  flex:none;height:26px;display:flex;align-items:center;padding:0 12px;gap:12px;
+  border-top:1px solid var(--rule);background:#0A0F16;
+}
+#readout{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* help */
+#help{
+  position:fixed;inset:0;background:rgba(4,6,10,.72);display:none;align-items:center;justify-content:center;z-index:9;
+  backdrop-filter:blur(2px);
+}
+#help.open{display:flex}
+.card{
+  width:min(600px,92vw);max-height:84vh;overflow:auto;background:var(--panel);
+  border:1px solid var(--rule);border-radius:5px;padding:20px 22px;
+}
+.card h2{margin:0 0 4px;font-family:var(--mono);font-size:14px;letter-spacing:.1em;color:#EAF3FA;font-weight:600}
+.card h3{margin:18px 0 6px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal)}
+.card p{margin:0 0 8px;line-height:1.6;color:#93A6B9;font-size:12px}
+.card table{width:100%;border-collapse:collapse;font-size:12px}
+.card td{padding:3px 0;color:#93A6B9;vertical-align:top}
+.card td:first-child{width:130px;font-family:var(--mono);color:var(--txt);font-size:11px}
+.card .close{position:sticky;top:0;float:right}
+
+@media (max-width:980px){
+  main{grid-template-columns:1fr;grid-template-rows:minmax(240px,1fr) auto}
+  .stagewrap{order:-1}
+  .rail{max-height:34vh;border:0;border-top:1px solid var(--rule)}
+  .rail.right{border-left:0}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><b>OPTICS&nbsp;BENCH</b><span>ray tracer</span></div>
+  <div class="sep"></div>
+  <div class="seg"><button id="btn2d" class="on">2D</button><button id="btn3d">3D</button></div>
+  <div class="seg"><button data-mode="select" class="on">Select</button><button data-mode="measure">Measure</button><button data-mode="calibrate">Set scale</button></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lab">Bounces</span><input id="bounces" type="range" min="1" max="60" value="12"><span id="bouncesV" class="mono">12</span></div>
+  <div class="sep"></div>
+  <label class="ck"><input type="checkbox" id="ckGrid" checked>Grid</label>
+  <label class="ck"><input type="checkbox" id="ckFoci" checked>Foci</label>
+  <label class="ck" id="ckNormWrap"><input type="checkbox" id="ckNorm">Normals</label>
+  <label class="ck" id="ckGuideWrap"><input type="checkbox" id="ckGuide" checked>Guides</label>
+  <label class="ck"><input type="checkbox" id="ckFres" title="Partial reflections at glass surfaces">Fresnel</label>
+  <label class="ck" id="ckSolidWrap" style="display:none"><input type="checkbox" id="ckSolid" checked title="Shade the bodies instead of drawing bare wireframe">Solid 3D</label>
+  <div class="sep"></div>
+  <div class="grp">
+    <label class="ck"><input type="checkbox" id="ckFade" checked>Fade</label>
+    <input id="fadeLen" type="range" min="0" max="100" value="59" title="Fade length: brightness falls as exp(-distance/length)">
+    <span id="fadeLenV" class="mono">6.0 m</span>
+  </div>
+  <div class="grp">
+    <span class="lab">Loss/bounce</span>
+    <input id="fadeLoss" type="range" min="0" max="90" value="0" title="Extra brightness lost at every reflection">
+    <span id="fadeLossV" class="mono">0%</span>
+  </div>
+  <div class="sep"></div>
+  <select id="presetSel">
+    <option value="">Load an example…</option>
+    <option value="parabola">Parabolic collector</option>
+    <option value="ellipse">Ellipse: focus to focus</option>
+    <option value="aberration">Spherical aberration</option>
+    <option value="cassegrain">Cassegrain telescope</option>
+    <option value="ball">Ball lens</option>
+    <option value="prism">Prism: 90° by TIR</option>
+    <option value="tir">TIR collimator</option>
+    <option value="lensmirror">Lens feeding a mirror</option>
+    <option value="link">Receiver: capture fraction</option>
+    <option value="cone">Cone concentrator</option>
+    <option value="pinhole">Pinhole aperture</option>
+    <option value="retro">Corner reflector</option>
+  </select>
+  <div class="grp">
+    <button id="addBeam">Add beam</button>
+    <button id="fitBtn">Fit</button>
+    <button id="saveBtn">Save</button>
+    <button id="openBtn">Open</button>
+    <button id="clearBtn">Clear</button>
+    <button id="helpBtn">?</button>
+    <input id="fileIn" type="file" accept="application/json" hidden>
+  </div>
+</header>
+
+<main>
+  <aside class="rail">
+    <div class="eyebrow">Surfaces</div>
+    <div id="shapeGrid"></div>
+    <div class="eyebrow">Scene</div>
+    <div id="sceneList"></div>
+  </aside>
+
+  <section class="stagewrap">
+    <canvas id="stage"></canvas>
+    <div id="measureOut"></div>
+    <div id="hint3">Drag to orbit · shift-drag to pan · wheel to zoom · edit in 2D</div>
+  </section>
+
+  <aside class="rail right">
+    <div class="eyebrow">Inspector</div>
+    <div id="inspector"></div>
+  </aside>
+</main>
+
+<footer><div id="readout"></div></footer>
+
+<div id="help">
+  <div class="card">
+    <button class="close" id="helpClose">Close</button>
+    <h2>OPTICS BENCH</h2>
+    <p>Specular ray tracing on a metric bench. Every surface is stored as its exact curve, so reflections use the true analytic normal — a parabola focuses to a point, a sphere shows its caustic.</p>
+    <h3>Working in 2D</h3>
+    <table>
+      <tr><td>Click a surface</td><td>Add it at the centre of the view</td></tr>
+      <tr><td>Drag body / centre</td><td>Move it</td></tr>
+      <tr><td>Drag pink handle</td><td>Rotate it</td></tr>
+      <tr><td>Drag end squares</td><td>Trim the surface back</td></tr>
+      <tr><td>Alt / Ctrl drag</td><td>Fine: a tenth of the pointer movement</td></tr>
+      <tr><td>Shift while dragging</td><td>Snap to grid / 15°</td></tr>
+      <tr><td>Wheel · drag empty</td><td>Zoom · pan</td></tr>
+    </table>
+    <h3>Working precisely</h3>
+    <p>Hold alt or ctrl while dragging and the shape follows a tenth of your pointer movement — release and re-press the key mid-drag as often as you like, it re-anchors instead of jumping. The same modifier gives a slow wheel zoom. Arrow keys nudge in a decade ladder, 0.1 mm to 10 mm, and Q/E rotate the same way. Every number box in the inspector accepts typed values with no limit and steps in 1 mm or 0.05°, so the slider beside it is only ever the coarse control.</p>
+    <h3>Measuring</h3>
+    <p>Measure mode: click two points; a green ring means you snapped to a vertex, a focus, or a ray hit. Set scale: click two points and type what that span should be — the bench rescales so your numbers are real.</p>
+    <h3>Receivers</h3>
+    <p>A <b>Receiver</b> swallows every ray that reaches it and reports what fraction of the beam that was. The figure floats over it on the canvas and appears again in the inspector, split beam by beam with a bar for each, so you can see which source is actually landing. It also gives the spot about its centre, rms and worst case, in millimetres — the number you want when you are sizing a detector rather than just aiming at one.</p>
+    <p>Any shape can be one: set Behaviour to Receiver and a curved surface becomes a curved detector. In 3D it counts the 3D trace, so the aperture is a real area rather than a length, and the percentage changes accordingly. The count is of rays, not power; with Fresnel on, the weighted figure appears underneath.</p>
+    <h3>Glass</h3>
+    <p>Set any closed shape's behaviour to <b>Glass</b> and it refracts instead of reflecting. Snell's law decides the bend, and which side of the surface the ray is on decides the direction: a circle becomes a ball lens, an ellipse an ellipsoidal one. Past the critical angle nothing gets out and the ray totally internally reflects, which is the whole trick behind the prism and the TIR collimator. The index slider runs from 1 to 4 — glass, acrylic, silicon.</p>
+    <p>The library adds four bodies built for it. <b>Lens</b> takes a front and back radius, an aperture and a centre thickness, so one entry covers biconvex, biconcave, plano- and meniscus (a radius of 0 is a flat face), and the inspector reports the lensmaker focal length as you drag. <b>Dome</b> is a half-ball, flat face toward &minus;x. <b>Prism</b> is an isosceles triangle: 60° to disperse, 90° to fold a beam by total internal reflection. <b>TIR collimator</b> is the LED optic — put a source on its S mark and the middle refracts while the sides bounce.</p>
+    <p><b>Fresnel</b> in the toolbar adds the partial reflection every real glass surface makes, at the strength the Fresnel equations give. Those ghosts are what you chase when a lens sits in front of a mirror. The main beam is not dimmed to pay for them, so treat the ghosts as relative, not as an energy budget.</p>
+    <h3>X cuts and Y cuts</h3>
+    <p>The half shapes come in pairs. <b>Half parabola X</b> and <b>Half ellipse X</b> are cut along the axis and keep the upper half. <b>Half parabola Y</b> and <b>Half ellipse Y</b> are cut across the axis, at a position you set: the parabola keeps either its outer arms (a ring once revolved) or its vertex bowl, the ellipse keeps either the cap at the +x end or everything before the cut. Slide the cut to the centre and you get the plain right or left half.</p>
+    <p>A cut never moves the foci, and a focus stranded on the discarded side stays marked — for the ellipse, rays from that focus still reflect off what is left and land on the other one. The half circle needs no pair: an arc plus a rotation already reaches every cut.</p>
+    <p><b>Flip about the axis</b>, in the inspector, mirrors any shape across its own x axis. Rotation alone cannot do this, so it is the only way to get the opposite half of a half shape.</p>
+    <h3>Guides</h3>
+    <p>Half shapes draw the half you removed as a dashed outline, so you can see the whole conic the mirror was cut from — and both foci stay marked, even the one on the missing side. The hyperbola also draws its far branch and its asymptotes. Guides never reflect anything; turn them off with the Guides box or U.</p>
+    <h3>Fading the beam</h3>
+    <p>Brightness falls off along the path as exp(&minus;s/L), where s is the distance the ray has travelled and L is the fade length. Inside a circle or an ellipse this separates the first pass from the fifth: shorten L until only the bounces you care about are left. <b>Loss/bounce</b> dims the ray a further fixed fraction at every reflection, which is what a real mirror stack does. A ray is dropped once it falls below about 1.5% brightness, so a short fade length also speeds up the view.</p>
+    <h3>Trimming</h3>
+    <p>A parabola whose arms run past the edge of your test, or an ellipse you only want a slice of: select it and drag the small square at either end along the curve. Everything past the square is deleted — not drawn, not traced, not pickable. The two Trim fields in the inspector do the same thing to 0.1% if you want it exact, and Restore brings the full shape back. The inspector reports how much reflecting surface is left, in metres.</p>
+    <p>Trimming is destructive on purpose; cuts are not. Use a trim to shorten a mirror, a cut to put a hole in one.</p>
+    <h3>Cuts and pinholes</h3>
+    <p>Each cut removes a span of the surface, given as a fraction along the curve. Rays pass straight through the gap. Pinhole sets two cuts either side of a narrow slit; drag the sliders to open or close it.</p>
+    <h3>3D</h3>
+    <p>Every profile sweeps into a solid: revolve about its optical axis (paraboloid, ellipsoid, cone) or extrude sideways into a trough. Rays are traced in full 3D against that surface. Editing stays in the 2D view.</p>
+    <p>Each body carries its own colour, listed against its name in the scene panel and editable under 3D body. Bodies are shaded matter; beams stay bright and glowing, so the two never read as the same thing. Surfaces and beams are painted in one depth order, so a ray running behind a mirror is hidden by it rather than drawn over the top. Turn off Solid 3D for the bare wireframe, where nothing hides anything.</p>
+    <p>A body is aimed with three angles. Rotation is the yaw the 2D view shows; tilt and roll are 3D only and take it off the bench plane. Tilt swings the axis of a revolved solid, roll tips a flat plate, trough or prism, and each does nothing to the other family. Beams take a tilt too. Every angle slider is endless: drag it to either end, let go, and it recentres for another turn, so you can wind a body round as many times as you like — or type the angle straight into the box.</p>
+    <h3>Keys</h3>
+    <table>
+      <tr><td>V · M</td><td>Select · Measure</td></tr>
+      <tr><td>2 · 3</td><td>2D · 3D view</td></tr>
+      <tr><td>Arrows</td><td>Nudge 1 mm · shift 10 mm · alt 0.1 mm</td></tr>
+      <tr><td>Q · E</td><td>Rotate 0.5° · shift 5° · alt 0.05°</td></tr>
+      <tr><td>D · Delete</td><td>Duplicate · Delete</td></tr>
+      <tr><td>G · F · N</td><td>Grid · Foci · Normals</td></tr>
+      <tr><td>A · U · R</td><td>Fade · Guides · Fresnel on / off</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   OPTICS BENCH — 2D/3D specular ray tracer
+   Units: metres. Screen: pixels-per-metre (ppm).
+   ============================================================ */
+'use strict';
+
+const TAU = Math.PI * 2, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const fmt = (v, n = 3) => (Math.abs(v) < 1e-9 ? 0 : v).toFixed(n);
+const RAY_COLORS = ['#4ADEDE', '#F2A93B', '#FF5D8F', '#8B6BFF', '#8CE04A', '#FF7A45'];
+/* 3D body palette. Deliberately muted and mid-luminance: surfaces are matter,
+   rays are light, so a ray must never read as part of a surface. */
+const BODY_COLORS = ['#4E7FA8', '#7CA05C', '#9B7BC0', '#B08A55', '#4E9B92',
+                     '#B0708C', '#7C8AA0', '#5F97B8', '#9A9455', '#6E6FB0'];
+
+/* ---------------- state ---------------- */
+const S = {
+  objects: [], sources: [], nextId: 1,
+  view: { cx: 0, cy: 0, ppm: 160 },
+  cam: { yaw: -2.4, pitch: 0.45, dist: 6, tx: 0, ty: 0, tz: 0 },
+  dim: 2,
+  mode: 'select',            // select | measure | calibrate
+  sel: null,                 // {kind:'obj'|'src', id}
+  maxBounces: 12,
+  show: { grid: true, foci: true, normals: false, labels: true, guides: true },
+  fade: { on: true, len: 6, loss: 0 }, fresnel: false,
+  measure: { a: null, b: null, live: null }, note: '',
+  calib: { a: null },
+  segs: [], raysets: [], hits: [],
+  dirty: true, traceMs: 0, rayCount: 0,
+  mesh3: null, rays3: [], dirty3: true, trace3Ms: 0,
+  solid3: true, nextColor: 0
+};
+
+const uid = () => S.nextId++;
+
+/* ---------------- shape catalogue ---------------- */
+const SHAPES = {
+  plane:        { label: 'Plane',        d3: 'extrude', mk: () => ({ L: 1.2 }) },
+  circle:       { label: 'Circle',       d3: 'revolve', mk: () => ({ R: 0.5 }) },
+  arc:          { label: 'Half circle',  d3: 'revolve', mk: () => ({ R: 0.7, span: 180 }) },
+  parabola:     { label: 'Parabola',     d3: 'revolve', mk: () => ({ f: 0.35, h: 0.7 }) },
+  halfparabola: { label: 'Half parabola X', d3: 'revolve', mk: () => ({ f: 0.35, h: 0.7 }) },
+  halfparabolaY:{ label: 'Half parabola Y', d3: 'revolve', mk: () => ({ f: 0.35, h: 0.7, d: 0.09, keep: 'arms' }) },
+  ellipse:      { label: 'Ellipse',      d3: 'revolve', mk: () => ({ a: 1.1, b: 0.65 }) },
+  halfellipse:  { label: 'Half ellipse X', d3: 'revolve', mk: () => ({ a: 1.1, b: 0.65 }) },
+  halfellipseY: { label: 'Half ellipse Y', d3: 'revolve', mk: () => ({ a: 1.1, b: 0.65, d: 0, keep: 'cap' }) },
+  concave:      { label: 'Concave',      d3: 'revolve', mk: () => ({ R: 1.2, ap: 0.9 }) },
+  vshape:       { label: 'V shape',      d3: 'revolve', mk: () => ({ L: 0.9, ang: 50 }) },
+  xshape:       { label: 'X shape',      d3: 'revolve', mk: () => ({ L: 1.0, ang: 50 }) },
+  cone:         { label: 'Cone',         d3: 'revolve', mk: () => ({ r1: 0.55, r2: 0.10, len: 1.1 }) },
+  hyperbola:    { label: 'Hyperbola',    d3: 'revolve', mk: () => ({ a: 0.45, b: 0.72, h: 0.35 }) },
+  lens:         { label: 'Lens',         d3: 'revolve', role: 'lens', mk: () => ({ R1: 0.9, R2: -0.9, h: 0.42, ct: 0.16 }) },
+  dome:         { label: 'Dome / half-ball', d3: 'revolve', role: 'lens', mk: () => ({ R: 0.45 }) },
+  prism:        { label: 'Prism',        d3: 'extrude', role: 'lens', mk: () => ({ ang: 90, L: 0.8 }) },
+  tirlens:      { label: 'TIR collimator', d3: 'revolve', role: 'lens', mk: () => ({ f: 0.22, len: 1.0, r0: 0.14, yc: 0.26 }) },
+  receiver:     { label: 'Receiver',     d3: 'revolve', role: 'receiver', mk: () => ({ L: 0.3 }) }
+};
+
+// [key, label, unit, min, max, step]
+const PARAMS = {
+  plane:        [['L', 'Length', 'm', 0.05, 6, 0.001]],
+  receiver:     [['L', 'Aperture', 'm', 0.002, 6, 0.001]],
+  circle:       [['R', 'Radius', 'm', 0.02, 3, 0.001]],
+  arc:          [['R', 'Radius', 'm', 0.02, 3, 0.001], ['span', 'Arc span', '\u00b0', 5, 360, 0.5]],
+  parabola:     [['f', 'Focal length f', 'm', 0.02, 3, 0.001], ['h', 'Half-aperture', 'm', 0.05, 3, 0.001]],
+  halfparabola: [['f', 'Focal length f', 'm', 0.02, 3, 0.001], ['h', 'Aperture', 'm', 0.05, 3, 0.001]],
+  halfparabolaY:[['f', 'Focal length f', 'm', 0.02, 3, 0.001], ['h', 'Half-aperture', 'm', 0.05, 3, 0.001], ['d', 'Cut depth along axis', 'm', 0, 3, 0.001]],
+  ellipse:      [['a', 'Semi-axis a', 'm', 0.05, 4, 0.001], ['b', 'Semi-axis b', 'm', 0.05, 4, 0.001]],
+  halfellipse:  [['a', 'Semi-axis a', 'm', 0.05, 4, 0.001], ['b', 'Semi-axis b', 'm', 0.05, 4, 0.001]],
+  halfellipseY: [['a', 'Semi-axis a', 'm', 0.05, 4, 0.001], ['b', 'Semi-axis b', 'm', 0.05, 4, 0.001], ['d', 'Cut position on the axis', 'm', -4, 4, 0.001]],
+  concave:      [['R', 'Radius of curvature', 'm', 0.05, 6, 0.001], ['ap', 'Aperture', 'm', 0.05, 5, 0.001]],
+  vshape:       [['L', 'Arm length', 'm', 0.05, 4, 0.001], ['ang', 'Opening angle', '\u00b0', 4, 176, 0.5]],
+  xshape:       [['L', 'Arm length', 'm', 0.05, 4, 0.001], ['ang', 'Cross angle', '\u00b0', 4, 176, 0.5]],
+  cone:         [['r1', 'Entry radius', 'm', 0.01, 3, 0.001], ['r2', 'Exit radius', 'm', 0, 3, 0.001], ['len', 'Length', 'm', 0.05, 5, 0.001]],
+  hyperbola:    [['a', 'Semi-transverse a', 'm', 0.02, 3, 0.001], ['b', 'Semi-conjugate b', 'm', 0.02, 4, 0.001], ['h', 'Half-aperture', 'm', 0.03, 3, 0.001]],
+  lens:         [['R1', 'Front radius R1', 'm', -4, 4, 0.001], ['R2', 'Back radius R2', 'm', -4, 4, 0.001], ['h', 'Half-aperture', 'm', 0.02, 3, 0.001], ['ct', 'Centre thickness', 'm', 0.002, 2, 0.001]],
+  dome:         [['R', 'Radius', 'm', 0.02, 3, 0.001]],
+  prism:        [['ang', 'Apex angle', '\u00b0', 5, 175, 0.5], ['L', 'Side length', 'm', 0.05, 4, 0.001]],
+  tirlens:      [['f', 'Wall focal length', 'm', 0.02, 2, 0.001], ['len', 'Body length', 'm', 0.1, 4, 0.001], ['r0', 'Cavity radius', 'm', 0.01, 2, 0.001], ['yc', 'Centre lens radius', 'm', 0.01, 2, 0.001]]
+};
+
+function makeObject(type, x = 0, y = 0) {
+  const sh = SHAPES[type];
+  return {
+    id: uid(), kind: 'obj', type, x, y, rot: 0, tilt: 0, roll: 0,
+    params: sh.mk(), cuts: [], trim: { a: 0, b: 1 }, role: sh.role || 'mirror', ior: 1.5, flip: false,
+    d3: sh.d3, depth: 0.8, revSteps: 40, name: sh.label,
+    color3: BODY_COLORS[(S.nextColor++) % BODY_COLORS.length]
+  };
+}
+function makeSource(x = -1.6, y = 0) {
+  const i = S.sources.length;
+  return {
+    id: uid(), kind: 'src', x, y, rot: 0, tilt: 0, type: 'parallel',
+    count: 17, spread: 30, width: 0.9,
+    color: RAY_COLORS[i % RAY_COLORS.length], on: true, name: 'Beam ' + (i + 1)
+  };
+}
+
+/* ---------------- profiles ----------------
+   Local frame: optical axis = +x. Returns paths of points with
+   analytic unit normals, plus focal markers. ------------------ */
+function P(x, y, nx, ny) { const l = Math.hypot(nx, ny) || 1; return { x, y, nx: nx / l, ny: ny / l }; }
+
+function profileOf(o) {
+  const p = o.params, paths = [], foci = [], ghosts = [];
+  const push = (pts, closed = false) => paths.push({ pts, closed });
+  /* ghosts are construction lines only: the rest of the conic, or its
+     asymptotes. They are drawn dashed and never reflect anything. */
+  const ghostArc = (rx, ry, t0, t1, n = 120) => {
+    const g = [];
+    for (let i = 0; i <= n; i++) { const t = t0 + (t1 - t0) * i / n; g.push({ x: rx * Math.cos(t), y: ry * Math.sin(t) }); }
+    ghosts.push(g);
+  };
+
+  switch (o.type) {
+    case 'plane': case 'receiver': {
+      const L = Math.max(1e-4, p.L), n = 48, pts = [];
+      for (let i = 0; i <= n; i++) pts.push(P(-L / 2 + L * i / n, 0, 0, 1));
+      push(pts); break;
+    }
+    case 'circle': {
+      const R = Math.max(1e-4, p.R), n = 320, pts = [];
+      for (let i = 0; i <= n; i++) { const a = TAU * i / n; pts.push(P(R * Math.cos(a), R * Math.sin(a), Math.cos(a), Math.sin(a))); }
+      push(pts, true);
+      foci.push({ x: 0, y: 0, label: 'C' }, { x: R / 2, y: 0, label: 'f' });
+      break;
+    }
+    case 'arc': case 'concave': {
+      let R, span;
+      R = Math.max(1e-4, p.R);
+      span = o.type === 'arc' ? p.span * D2R : 2 * Math.asin(clamp((p.ap / 2) / R, 0, 1));
+      const n = 280, pts = [];
+      for (let i = 0; i <= n; i++) { const a = -span / 2 + span * i / n; pts.push(P(R * Math.cos(a), R * Math.sin(a), Math.cos(a), Math.sin(a))); }
+      push(pts, Math.abs(span - TAU) < 1e-6);
+      foci.push({ x: 0, y: 0, label: 'C' }, { x: R / 2, y: 0, label: 'F' });
+      if (span < TAU - 1e-6) ghostArc(R, R, span / 2, TAU - span / 2);
+      break;
+    }
+    case 'parabola': case 'halfparabola': {
+      const f = Math.max(1e-4, p.f), h = p.h, n = 280, y0 = o.type === 'parabola' ? -h : 0, pts = [];
+      for (let i = 0; i <= n; i++) { const y = y0 + (h - y0) * i / n; pts.push(P(y * y / (4 * f), y, 1, -y / (2 * f))); }
+      push(pts);
+      foci.push({ x: f, y: 0, label: 'F' });
+      if (o.type === 'halfparabola') {
+        const g = [];
+        for (let i = 0; i <= n; i++) { const y = -h + h * i / n; g.push({ x: y * y / (4 * f), y }); }
+        ghosts.push(g);
+      }
+      break;
+    }
+    case 'halfparabolaY': {
+      // cut by a line across the axis at depth d; keep the outer arms or the vertex bowl
+      const f = Math.max(1e-4, p.f), h = p.h, n = 160;
+      const yc = clamp(Math.sqrt(4 * f * Math.max(0, p.d)), 0, h);
+      const arm = (ya, yb, into) => {
+        const q = [];
+        for (let i = 0; i <= n; i++) { const y = ya + (yb - ya) * i / n; q.push(into ? P(y * y / (4 * f), y, 1, -y / (2 * f)) : { x: y * y / (4 * f), y }); }
+        return q;
+      };
+      if (p.keep === 'bowl') {
+        push(arm(-yc, yc, true));
+        if (yc < h) { ghosts.push(arm(yc, h, false)); ghosts.push(arm(-h, -yc, false)); }
+      } else {
+        if (yc < h) { push(arm(-h, -yc, true)); push(arm(yc, h, true)); }
+        if (yc > 0) ghosts.push(arm(-yc, yc, false));
+      }
+      if (yc > 0) ghosts.push([{ x: yc * yc / (4 * f), y: -h * 1.05 }, { x: yc * yc / (4 * f), y: h * 1.05 }]);
+      foci.push({ x: f, y: 0, label: 'F' });
+      break;
+    }
+    case 'halfellipseY': {
+      // cut by a chord across the axis at x = d; keep the +x cap or everything before it
+      const a = Math.max(1e-4, p.a), b = Math.max(1e-4, p.b), n = 240;
+      const th = Math.acos(clamp((p.d || 0) / a, -1, 1));      // half-angle subtended by the chord
+      const arc = (t0, t1, into) => {
+        const q = [];
+        for (let i = 0; i <= n; i++) {
+          const t = t0 + (t1 - t0) * i / n;
+          q.push(into ? P(a * Math.cos(t), b * Math.sin(t), Math.cos(t) / a, Math.sin(t) / b)
+                      : { x: a * Math.cos(t), y: b * Math.sin(t) });
+        }
+        return q;
+      };
+      const cap = [-th, th], body = [th, TAU - th];
+      const keepCap = (p.keep || 'cap') !== 'body';
+      const keep = keepCap ? cap : body, drop = keepCap ? body : cap;
+      if (Math.abs(keep[1] - keep[0]) > 1e-4) push(keep[0] === -th && th >= Math.PI - 1e-6 ? arc(-Math.PI, Math.PI, true) : arc(keep[0], keep[1], true));
+      if (Math.abs(drop[1] - drop[0]) > 1e-4) ghosts.push(arc(drop[0], drop[1], false));
+      const yc = b * Math.sin(th);
+      if (yc > 1e-6) ghosts.push([{ x: p.d, y: -yc * 1.15 }, { x: p.d, y: yc * 1.15 }]);
+      if (Math.abs(a - b) > 1e-6) {
+        if (a > b) { const c = Math.sqrt(a * a - b * b); foci.push({ x: -c, y: 0, label: 'F1' }, { x: c, y: 0, label: 'F2' }); }
+        else { const c = Math.sqrt(b * b - a * a); foci.push({ x: 0, y: -c, label: 'F1' }, { x: 0, y: c, label: 'F2' }); }
+      } else foci.push({ x: 0, y: 0, label: 'C' });
+      break;
+    }
+    case 'ellipse': case 'halfellipse': {
+      const a = Math.max(1e-4, p.a), b = Math.max(1e-4, p.b), n = 400, full = o.type === 'ellipse', pts = [];
+      const end = full ? TAU : Math.PI;
+      for (let i = 0; i <= n; i++) { const t = end * i / n; pts.push(P(a * Math.cos(t), b * Math.sin(t), Math.cos(t) / a, Math.sin(t) / b)); }
+      push(pts, full);
+      if (!full) ghostArc(a, b, Math.PI, TAU);
+      if (Math.abs(a - b) > 1e-6) {
+        if (a > b) { const c = Math.sqrt(a * a - b * b); foci.push({ x: -c, y: 0, label: 'F1' }, { x: c, y: 0, label: 'F2' }); }
+        else { const c = Math.sqrt(b * b - a * a); foci.push({ x: 0, y: -c, label: 'F1' }, { x: 0, y: c, label: 'F2' }); }
+      } else foci.push({ x: 0, y: 0, label: 'C' });
+      break;
+    }
+    case 'vshape': {
+      const L = p.L, A = p.ang / 2 * D2R, n = 24, pts = [];
+      const ux = Math.cos(A), uy = Math.sin(A);
+      for (let i = n; i >= 0; i--) pts.push(P(L * ux * i / n, -L * uy * i / n, -uy, -ux));
+      for (let i = 1; i <= n; i++) pts.push(P(L * ux * i / n, L * uy * i / n, -uy, ux));
+      push(pts); break;
+    }
+    case 'xshape': {
+      const L = p.L, A = p.ang / 2 * D2R, n = 32;
+      for (const s of [1, -1]) {
+        const ux = Math.cos(A), uy = s * Math.sin(A), pts = [];
+        for (let i = 0; i <= n; i++) { const t = -L / 2 + L * i / n; pts.push(P(t * ux, t * uy, -uy, ux)); }
+        push(pts);
+      }
+      break;
+    }
+    case 'cone': {
+      const r1 = p.r1, r2 = p.r2, len = Math.max(1e-4, p.len), n = 36;
+      for (const s of [1, -1]) {
+        const pts = [];
+        for (let i = 0; i <= n; i++) { const u = i / n; pts.push(P(len * u, s * (r1 + (r2 - r1) * u), -(r2 - r1) * s, len)); }
+        push(pts);
+      }
+      break;
+    }
+    case 'lens': {
+      // closed body: front surface, rim, back surface, rim.  R > 0 puts the centre of
+      // curvature to the right.  R = 0 means flat.  Normals point out of the glass.
+      const ct = Math.max(1e-4, p.ct), m = 90;
+      let h = Math.max(1e-4, p.h);
+      for (const R of [p.R1, p.R2]) if (Math.abs(R) > 1e-6) h = Math.min(h, Math.abs(R) * 0.9995);
+      const surf = (R, xv, front) => {
+        const q = [];
+        if (Math.abs(R) < 1e-6) {
+          for (let i = 0; i <= m; i++) q.push(P(xv, -h + 2 * h * i / m, front ? -1 : 1, 0));
+          return q;
+        }
+        const sg = Math.sign(R), xc = xv + R, mm = front ? sg : -sg;
+        for (let i = 0; i <= m; i++) {
+          const y = -h + 2 * h * i / m, x = xc - sg * Math.sqrt(Math.max(0, R * R - y * y));
+          q.push(P(x, y, mm * (x - xc), mm * y));
+        }
+        return q;
+      };
+      const fr = surf(p.R1, -ct / 2, true), bk = surf(p.R2, ct / 2, false);
+      const pts = fr.slice();
+      const rim = (from, to, ny) => { for (let i = 1; i <= 6; i++) pts.push(P(from.x + (to.x - from.x) * i / 6, from.y + (to.y - from.y) * i / 6, 0, ny)); };
+      rim(fr[m], bk[m], 1);
+      for (let i = m; i >= 0; i--) pts.push(bk[i]);
+      rim(bk[0], fr[0], -1);
+      push(pts, true);
+      break;
+    }
+    case 'dome': {
+      const R = Math.max(1e-4, p.R), m = 160, pts = [];
+      for (let i = 0; i <= 24; i++) pts.push(P(0, -R + 2 * R * i / 24, -1, 0));      // flat face
+      for (let i = 0; i <= m; i++) {                                                 // dome
+        const a = Math.PI / 2 - Math.PI * i / m;
+        pts.push(P(R * Math.cos(a), R * Math.sin(a), Math.cos(a), Math.sin(a)));
+      }
+      push(pts, true);
+      foci.push({ x: 0, y: 0, label: 'C' });
+      break;
+    }
+    case 'prism': {
+      const L = Math.max(1e-4, p.L), A = p.ang / 2 * D2R, m = 36;
+      const ca = Math.cos(A), sa = Math.sin(A), pts = [];
+      for (let i = 0; i <= m; i++) { const u = i / m; pts.push(P(L * ca * u, L * sa * u, -sa, ca)); }        // upper face
+      for (let i = 1; i <= m; i++) { const u = i / m; pts.push(P(L * ca, L * sa - 2 * L * sa * u, 1, 0)); }  // base
+      for (let i = 1; i <= m; i++) { const u = i / m; pts.push(P(L * ca * (1 - u), -L * sa * (1 - u), -sa, -ca)); }
+      push(pts, true);
+      break;
+    }
+    case 'tirlens': {
+      // source sits at the origin.  Cavity is a sphere centred on it, so rays enter
+      // radially and unbent; the outer wall is a parabola focused on it, so whatever
+      // exceeds the critical angle leaves collimated.
+      const f = Math.max(1e-3, p.f), len = Math.max(f * 0.5, p.len), n = Math.max(1.01, o.ior || 1.5);
+      const r0 = clamp(p.r0, 1e-3, f * 0.9);
+      const rout = 2 * Math.sqrt(f * (len + f));
+      const yc = clamp(p.yc, 1e-3, rout * 0.9);
+      let Rc = len * (n - 1) / n;
+      for (let i = 0; i < 4; i++) {                       // collimate the near-axis rays
+        const xc = len - Math.sqrt(Math.max(1e-9, Rc * Rc - yc * yc));
+        Rc = Math.max(yc * 1.05, (xc + Rc) * (n - 1) / n);
+      }
+      const xc = len - Math.sqrt(Math.max(1e-9, Rc * Rc - yc * yc));
+      const th = Math.asin(clamp(yc / Rc, -1, 1)), m = 120, pts = [];
+      for (let i = 0; i <= 12; i++) pts.push(P(len, rout - (rout - yc) * i / 12, 1, 0));          // upper exit face
+      for (let i = 1; i <= m; i++) {                                                             // centre lens
+        const t = th - 2 * th * i / m;
+        pts.push(P(xc + Rc * Math.cos(t), Rc * Math.sin(t), Math.cos(t), Math.sin(t)));
+      }
+      for (let i = 1; i <= 12; i++) pts.push(P(len, -yc - (rout - yc) * i / 12, 1, 0));           // lower exit face
+      for (let i = 1; i <= 2 * m; i++) {                                                         // TIR wall
+        const y = -rout + 2 * rout * i / (2 * m);
+        pts.push(P(y * y / (4 * f) - f, y, -4 * f, 2 * y));
+      }
+      push(pts, true);
+      const cav = [];
+      for (let i = 0; i <= 120; i++) { const a = TAU * i / 120; cav.push(P(r0 * Math.cos(a), r0 * Math.sin(a), -Math.cos(a), -Math.sin(a))); }
+      push(cav, true);
+      foci.push({ x: 0, y: 0, label: 'S' });
+      break;
+    }
+    case 'hyperbola': {
+      // x^2/a^2 - y^2/b^2 = 1, right branch;  normal from grad F = (x/a^2, -y/b^2)
+      const a = Math.max(1e-4, p.a), b = Math.max(1e-4, p.b), h = p.h, n = 280, pts = [];
+      const um = Math.asinh(h / b);
+      for (let i = 0; i <= n; i++) {
+        const u = -um + 2 * um * i / n, x = a * Math.cosh(u), y = b * Math.sinh(u);
+        pts.push(P(x, y, x / (a * a), -y / (b * b)));
+      }
+      push(pts);
+      const c = Math.hypot(a, b);
+      foci.push({ x: c, y: 0, label: 'F1' }, { x: -c, y: 0, label: 'F2' });
+      const other = [];
+      for (let i = 0; i <= n; i++) { const u = -um + 2 * um * i / n; other.push({ x: -a * Math.cosh(u), y: b * Math.sinh(u) }); }
+      ghosts.push(other);
+      const ext = Math.max(a * Math.cosh(um), h) * 1.2, k = b / a;   // asymptotes y = +-(b/a)x
+      ghosts.push([{ x: -ext, y: -k * ext }, { x: ext, y: k * ext }]);
+      ghosts.push([{ x: -ext, y: k * ext }, { x: ext, y: -k * ext }]);
+      break;
+    }
+  }
+  if (o.flip) {                                  // mirror about the local x axis
+    for (const pa of paths) for (const q of pa.pts) { q.y = -q.y; q.ny = -q.ny; }
+    for (const f of foci) f.y = -f.y;
+    for (const g of ghosts) for (const q of g) q.y = -q.y;
+  }
+  return { paths, foci, ghosts, axis: (o.type === 'plane' || o.type === 'receiver') ? 'y' : 'x' };
+}
+
+/* ---------------- cuts ---------------- */
+const isCut = (o, t) => o.cuts.some(c => t >= Math.min(c.a, c.b) && t <= Math.max(c.a, c.b));
+
+/* assign global parameter t across all path vertices */
+function paramize(pr) {
+  let total = 0; for (const pa of pr.paths) total += pa.pts.length;
+  let k = 0;
+  for (const pa of pr.paths) for (const q of pa.pts) { q.t = total > 1 ? k / (total - 1) : 0; k++; }
+  return pr;
+}
+
+/* world-space segment list for one object */
+const trimOf = o => o.trim || { a: 0, b: 1 };
+const isTrimmed = (o, t) => { const r = trimOf(o); return t < r.a - 1e-9 || t > r.b + 1e-9; };
+
+function segmentsOf(o) {
+  const pr = paramize(profileOf(o));
+  const c = Math.cos(o.rot), s = Math.sin(o.rot), out = [];
+  const TX = (x, y) => [o.x + c * x - s * y, o.y + s * x + c * y];
+  const TN = (nx, ny) => [c * nx - s * ny, s * nx + c * ny];
+  let kept = 0, total = 0;
+  for (const pa of pr.paths) {
+    for (let i = 0; i < pa.pts.length - 1; i++) {
+      const p0 = pa.pts[i], p1 = pa.pts[i + 1];
+      const tm = (p0.t + p1.t) / 2;
+      const [ax, ay] = TX(p0.x, p0.y), [bx, by] = TX(p1.x, p1.y);
+      const L = Math.hypot(bx - ax, by - ay);
+      total += L;
+      if (isTrimmed(o, tm)) continue;            // trimmed off: gone from the scene entirely
+      const cut = isCut(o, tm);
+      if (!cut) kept += L;
+      const [n0x, n0y] = TN(p0.nx, p0.ny), [n1x, n1y] = TN(p1.nx, p1.ny);
+      out.push({ ax, ay, bx, by, n0x, n0y, n1x, n1y, cut, obj: o });
+    }
+  }
+  o._len = { kept, total };
+  o._foci = pr.foci.map(f => { const [x, y] = TX(f.x, f.y); return { x, y, label: f.label }; });
+  o._ghosts = (pr.ghosts || []).map(g => g.map(q => { const [x, y] = TX(q.x, q.y); return { x, y }; }));
+  return out;
+}
+
+function profileWorld(o) {
+  const pr = paramize(profileOf(o)), c = Math.cos(o.rot), s = Math.sin(o.rot), out = [];
+  for (const pa of pr.paths) for (const q of pa.pts) out.push({ x: o.x + c * q.x - s * q.y, y: o.y + s * q.x + c * q.y, t: q.t });
+  return out;
+}
+function trimHandles(o) {
+  if (!o._segs || !o._segs.length) return null;
+  const f = o._segs[0], l = o._segs[o._segs.length - 1];
+  return { a: { x: f.ax, y: f.ay }, b: { x: l.bx, y: l.by } };
+}
+
+function rebuildScene() {
+  S.segs = [];
+  for (const o of S.objects) { o._segs = segmentsOf(o); for (const sg of o._segs) if (!sg.cut) S.segs.push(sg); }
+  traceScene(); S.dirty3 = true;
+}
+
+/* ---------------- emitters (2D) ---------------- */
+function emit2(src) {
+  const rays = [], c = Math.cos(src.rot), s = Math.sin(src.rot);
+  const N = Math.max(1, src.count | 0);
+  const dirLocal = (a) => [c * Math.cos(a) - s * Math.sin(a), s * Math.cos(a) + c * Math.sin(a)];
+  if (src.type === 'parallel') {
+    for (let i = 0; i < N; i++) {
+      const u = N === 1 ? 0 : (i / (N - 1) - 0.5) * src.width;
+      const ox = src.x - s * u, oy = src.y + c * u;
+      const [dx, dy] = dirLocal(0);
+      rays.push({ ox, oy, dx, dy });
+    }
+  } else if (src.type === 'fan') {
+    const sp = src.spread * D2R;
+    for (let i = 0; i < N; i++) {
+      const a = N === 1 ? 0 : -sp / 2 + sp * i / (N - 1);
+      const [dx, dy] = dirLocal(a);
+      rays.push({ ox: src.x, oy: src.y, dx, dy });
+    }
+  } else { // point
+    for (let i = 0; i < N; i++) { const a = TAU * i / N; const [dx, dy] = dirLocal(a); rays.push({ ox: src.x, oy: src.y, dx, dy }); }
+  }
+  return rays;
+}
+
+/* ---------------- 2D tracer ----------------
+   Mirrors reflect.  Lenses use Snell's law, with the side decided by the sign of
+   d.n against the outward normal of the closed body; past the critical angle the
+   ray is totally internally reflected.  With Fresnel on, each refraction also
+   spawns a weak partial reflection.                                            */
+function resetRx() {
+  S.emitted = 0;
+  for (const o of S.objects) if (o.role === 'receiver') o._rx = { by: {}, n: 0, w: 0, r: [] };
+}
+function recordRx(obj, src, gen, w, hx, hy, hz) {
+  const rx = obj._rx; if (!rx) return;
+  let e = rx.by[src.id];
+  if (!e) e = rx.by[src.id] = { n: 0, w: 0, name: src.name, color: src.color, emitted: src._emitted || 0 };
+  if (gen === 0) { e.n++; rx.n++; }
+  e.w += w; rx.w += w;
+  if (rx.r.length < 4000) {
+    const dx = hx - obj.x, dy = hy - obj.y, dz = hz || 0;
+    rx.r.push({ d: Math.hypot(dx, dy, dz), x: hx, y: hy });
+  }
+}
+
+function traceScene() {
+  const t0 = performance.now();
+  const segs = S.segs, far = 60, BUDGET = 3000;
+  S.raysets = []; S.hits = []; S.rayCount = 0;
+  resetRx();
+  for (const src of S.sources) {
+    if (!src.on) continue;
+    const polys = [], wts = [], s0s = [], k0s = [];
+    const seed = emit2(src); src._emitted = seed.length; S.emitted += seed.length;
+    const work = seed.map(r => ({ ox: r.ox, oy: r.oy, dx: r.dx, dy: r.dy, w: 1, s0: 0, k0: 0, gen: 0 }));
+    let qi = 0;
+    while (qi < work.length && polys.length < BUDGET) {
+      const R0 = work[qi++];
+      let ox = R0.ox, oy = R0.oy, dx = R0.dx, dy = R0.dy;
+      const pts = [ox, oy];
+      let s = R0.s0, k = R0.k0, terminated = false;
+      for (let b = 0; b < S.maxBounces; b++) {
+        let best = Infinity, bs = null, bu = 0;
+        for (let i = 0; i < segs.length; i++) {
+          const sg = segs[i];
+          const ex = sg.bx - sg.ax, ey = sg.by - sg.ay;
+          const den = dx * ey - dy * ex;
+          if (Math.abs(den) < 1e-12) continue;
+          const px = sg.ax - ox, py = sg.ay - oy;
+          const t = (px * ey - py * ex) / den;
+          if (t <= 1e-7 || t >= best) continue;
+          const u = (px * dy - py * dx) / den;
+          if (u < 0 || u > 1) continue;
+          best = t; bs = sg; bu = u;
+        }
+        if (!bs) break;
+        const hx = ox + dx * best, hy = oy + dy * best;
+        pts.push(hx, hy); s += best;
+        if (S.hits.length < 4000) S.hits.push({ x: hx, y: hy, c: src.color });
+        const obj = bs.obj;
+        if (obj.role === 'receiver') { recordRx(obj, src, R0.gen, R0.w, hx, hy, 0); terminated = true; break; }
+        if (obj.role === 'absorber') { terminated = true; break; }
+        let nx = bs.n0x + (bs.n1x - bs.n0x) * bu, ny = bs.n0y + (bs.n1y - bs.n0y) * bu;
+        const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+
+        if (obj.role === 'lens') {
+          const ior = Math.max(1.0001, obj.ior || 1.5);
+          const entering = (dx * nx + dy * ny) < 0;
+          if (!entering) { nx = -nx; ny = -ny; }
+          const n1 = entering ? 1 : ior, n2 = entering ? ior : 1;
+          const eta = n1 / n2, cosI = -(dx * nx + dy * ny);
+          const kk = 1 - eta * eta * (1 - cosI * cosI);
+          if (kk < 0) {                                     // total internal reflection
+            dx += 2 * cosI * nx; dy += 2 * cosI * ny;
+          } else {
+            const cosT = Math.sqrt(kk);
+            if (S.fresnel && R0.gen < 2 && work.length < BUDGET) {
+              const rs = (n1 * cosI - n2 * cosT) / (n1 * cosI + n2 * cosT);
+              const rp = (n1 * cosT - n2 * cosI) / (n1 * cosT + n2 * cosI);
+              const Rf = (rs * rs + rp * rp) / 2;
+              if (R0.w * Rf > 0.02) {
+                const rdx = dx + 2 * cosI * nx, rdy = dy + 2 * cosI * ny;
+                work.push({ ox: hx + rdx * 1e-6, oy: hy + rdy * 1e-6, dx: rdx, dy: rdy, w: R0.w * Rf, s0: s, k0: k + 1, gen: R0.gen + 1 });
+              }
+            }
+            dx = eta * dx + (eta * cosI - cosT) * nx;
+            dy = eta * dy + (eta * cosI - cosT) * ny;
+          }
+        } else {                                            // mirror
+          let dot = dx * nx + dy * ny;
+          if (dot > 0) { nx = -nx; ny = -ny; dot = -dot; }
+          dx -= 2 * dot * nx; dy -= 2 * dot * ny;
+        }
+        const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+        k++; ox = hx + dx * 1e-6; oy = hy + dy * 1e-6;
+      }
+      if (!terminated) pts.push(pts[pts.length - 2] + dx * far, pts[pts.length - 1] + dy * far);
+      polys.push(pts); wts.push(R0.w); s0s.push(R0.s0); k0s.push(R0.k0);
+      S.rayCount++;
+    }
+    S.raysets.push({ color: src.color, polys, wts, s0: s0s, k0: k0s });
+  }
+  S.traceMs = performance.now() - t0;
+}
+
+/* ============================================================
+   2D RENDERER
+   ============================================================ */
+const cv = () => document.getElementById('stage');
+let CTX = null, W = 0, H = 0, DPR = 1;
+
+const sx = x => W / 2 + (x - S.view.cx) * S.view.ppm;
+const sy = y => H / 2 - (y - S.view.cy) * S.view.ppm;
+const wx = px => S.view.cx + (px - W / 2) / S.view.ppm;
+const wy = py => S.view.cy - (py - H / 2) / S.view.ppm;
+
+function resize() {
+  const c = cv(), r = c.getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.max(10, r.width); H = Math.max(10, r.height);
+  c.width = Math.round(W * DPR); c.height = Math.round(H * DPR);
+  CTX = c.getContext('2d');
+  CTX.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function niceStep(ppm) {
+  const cand = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
+  for (const s of cand) if (s * ppm >= 46) return s;
+  return 100;
+}
+
+function drawGrid(g) {
+  const step = niceStep(S.view.ppm), ppm = S.view.ppm;
+  const x0 = Math.floor(wx(0) / step) * step, x1 = wx(W), y0 = Math.floor(wy(H) / step) * step, y1 = wy(0);
+  g.lineWidth = 1;
+  for (let x = x0; x <= x1; x += step) {
+    const px = Math.round(sx(x)) + 0.5, major = Math.abs(x / step) % 5 < 0.02;
+    g.strokeStyle = major ? 'rgba(120,150,180,.16)' : 'rgba(120,150,180,.065)';
+    g.beginPath(); g.moveTo(px, 0); g.lineTo(px, H); g.stroke();
+  }
+  for (let y = y0; y <= y1; y += step) {
+    const py = Math.round(sy(y)) + 0.5, major = Math.abs(y / step) % 5 < 0.02;
+    g.strokeStyle = major ? 'rgba(120,150,180,.16)' : 'rgba(120,150,180,.065)';
+    g.beginPath(); g.moveTo(0, py); g.lineTo(W, py); g.stroke();
+  }
+  g.strokeStyle = 'rgba(140,170,200,.30)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, Math.round(sy(0)) + .5); g.lineTo(W, Math.round(sy(0)) + .5);
+  g.moveTo(Math.round(sx(0)) + .5, 0); g.lineTo(Math.round(sx(0)) + .5, H); g.stroke();
+}
+
+function drawScaleBar(g) {
+  const step = niceStep(S.view.ppm), px = step * S.view.ppm;
+  const x = 18, y = H - 22;
+  g.strokeStyle = '#9fb3c8'; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(x, y); g.lineTo(x + px, y); g.moveTo(x, y - 5); g.lineTo(x, y + 5);
+  g.moveTo(x + px, y - 5); g.lineTo(x + px, y + 5); g.stroke();
+  g.fillStyle = '#9fb3c8'; g.font = '11px ui-monospace,Menlo,monospace';
+  g.fillText(step >= 1 ? step + ' m' : (step * 100).toFixed(step < 0.01 ? 1 : 0) + ' cm', x + px + 8, y + 4);
+}
+
+function objColor(o, selected) {
+  if (selected) return '#FF5D8F';
+  return o.role === 'absorber' ? '#8797AA' : o.role === 'lens' ? '#B8C6FF'
+       : o.role === 'receiver' ? '#5BE0A0' : '#7FE3F0';
+}
+
+function drawObjects(g) {
+  for (const o of S.objects) {
+    const selected = S.sel && S.sel.kind === 'obj' && S.sel.id === o.id;
+    const col = objColor(o, selected);
+    // construction geometry: the rest of the conic, asymptotes
+    if (S.show.guides && o._ghosts && o._ghosts.length) {
+      g.setLineDash([4, 5]); g.lineWidth = 1;
+      g.strokeStyle = selected ? 'rgba(255,93,143,.42)' : 'rgba(130,180,205,.30)';
+      g.beginPath();
+      for (const gh of o._ghosts) {
+        g.moveTo(sx(gh[0].x), sy(gh[0].y));
+        for (let i = 1; i < gh.length; i++) g.lineTo(sx(gh[i].x), sy(gh[i].y));
+      }
+      g.stroke(); g.setLineDash([]);
+    }
+    if (o.role === 'lens' && o._segs.length) {          // glass body
+      const path = new Path2D();
+      let prev = null;
+      for (const sg of o._segs) {
+        if (!prev || Math.hypot(prev[0] - sg.ax, prev[1] - sg.ay) > 1e-9) path.moveTo(sx(sg.ax), sy(sg.ay));
+        path.lineTo(sx(sg.bx), sy(sg.by));
+        prev = [sg.bx, sg.by];
+      }
+      g.fillStyle = selected ? 'rgba(255,93,143,.10)' : 'rgba(150,170,255,.10)';
+      g.fill(path, 'evenodd');
+    }
+    // cut (open) portions
+    g.setLineDash([3, 4]); g.lineWidth = 1; g.strokeStyle = 'rgba(160,175,195,.35)';
+    g.beginPath();
+    for (const s of o._segs) if (s.cut) { g.moveTo(sx(s.ax), sy(s.ay)); g.lineTo(sx(s.bx), sy(s.by)); }
+    g.stroke(); g.setLineDash([]);
+    // reflective portions
+    g.lineWidth = selected ? 3 : 2.2; g.strokeStyle = col; g.lineCap = 'round';
+    g.beginPath();
+    for (const s of o._segs) if (!s.cut) { g.moveTo(sx(s.ax), sy(s.ay)); g.lineTo(sx(s.bx), sy(s.by)); }
+    g.stroke();
+    if (o.role === 'absorber') {
+      g.lineWidth = 1; g.strokeStyle = 'rgba(135,151,170,.5)';
+      g.beginPath();
+      for (let i = 0; i < o._segs.length; i += 6) {
+        const s = o._segs[i]; if (s.cut) continue;
+        const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2, L = 8;
+        g.moveTo(sx(mx), sy(my)); g.lineTo(sx(mx) + s.n0x * L, sy(my) - s.n0y * L);
+      }
+      g.stroke();
+    }
+    if (S.show.normals) {
+      g.lineWidth = 1; g.strokeStyle = 'rgba(127,227,240,.35)'; g.beginPath();
+      for (let i = 0; i < o._segs.length; i += 8) {
+        const s = o._segs[i]; if (s.cut) continue;
+        const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+        g.moveTo(sx(mx), sy(my)); g.lineTo(sx(mx) + s.n0x * 16, sy(my) - s.n0y * 16);
+      }
+      g.stroke();
+    }
+    if (selected && o._segs.length) {                 // ticks at every free end of the surface
+      const near = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-9;
+      g.fillStyle = '#FF5D8F';
+      for (let i = 0; i < o._segs.length; i++) {
+        const cur = o._segs[i], prev = o._segs[i - 1], next = o._segs[i + 1];
+        if (!prev || !near([prev.bx, prev.by], [cur.ax, cur.ay])) g.fillRect(sx(cur.ax) - 2.5, sy(cur.ay) - 2.5, 5, 5);
+        if (!next || !near([cur.bx, cur.by], [next.ax, next.ay])) g.fillRect(sx(cur.bx) - 2.5, sy(cur.by) - 2.5, 5, 5);
+      }
+    }
+    if (selected) {
+      const th = trimHandles(o);
+      if (th) {
+        g.strokeStyle = '#FF5D8F'; g.lineWidth = 1.6;
+        for (const h of [th.a, th.b]) g.strokeRect(sx(h.x) - 4, sy(h.y) - 4, 8, 8);
+      }
+    }
+    if (o.role === 'receiver' && o._rx) {
+      g.fillStyle = '#5BE0A0';
+      for (let i = 0; i < o._rx.r.length && i < 800; i++) {
+        const h = o._rx.r[i];
+        g.beginPath(); g.arc(sx(h.x), sy(h.y), 1.8, 0, TAU); g.fill();
+      }
+      if (S.show.labels && S.emitted) {
+        const pct = 100 * o._rx.n / S.emitted;
+        const txt = fmt(pct, 1) + '%  ' + o._rx.n + '/' + S.emitted;
+        g.font = '11px ui-monospace,Menlo,monospace';
+        const w = g.measureText(txt).width + 12, px = sx(o.x), py = sy(o.y) - 20;
+        g.fillStyle = 'rgba(8,11,16,.88)'; g.fillRect(px - w / 2, py - 13, w, 18);
+        g.strokeStyle = 'rgba(91,224,160,.5)'; g.lineWidth = 1; g.strokeRect(px - w / 2, py - 13, w, 18);
+        g.fillStyle = '#5BE0A0'; g.textAlign = 'center'; g.fillText(txt, px, py); g.textAlign = 'left';
+      }
+    }
+    if (S.show.foci && o._foci) for (const f of o._foci) drawFocus(g, f, selected);
+    // origin + rotation handle
+    if (selected) {
+      const ox = sx(o.x), oy = sy(o.y), R = 54;
+      const hx = ox + Math.cos(o.rot) * R, hy = oy - Math.sin(o.rot) * R;
+      g.strokeStyle = 'rgba(255,93,143,.5)'; g.lineWidth = 1; g.setLineDash([2, 3]);
+      g.beginPath(); g.moveTo(ox, oy); g.lineTo(hx, hy); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#FF5D8F'; g.beginPath(); g.arc(hx, hy, 5, 0, TAU); g.fill();
+      g.strokeStyle = '#FF5D8F'; g.lineWidth = 1.5;
+      g.beginPath(); g.arc(ox, oy, 5, 0, TAU); g.stroke();
+      g.beginPath(); g.moveTo(ox - 9, oy); g.lineTo(ox + 9, oy); g.moveTo(ox, oy - 9); g.lineTo(ox, oy + 9); g.stroke();
+    }
+  }
+}
+
+function drawFocus(g, f, hot) {
+  const x = sx(f.x), y = sy(f.y);
+  g.strokeStyle = hot ? '#FFC46B' : '#F2A93B'; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(x - 5, y - 5); g.lineTo(x + 5, y + 5); g.moveTo(x + 5, y - 5); g.lineTo(x - 5, y + 5); g.stroke();
+  if (S.show.labels) {
+    g.fillStyle = '#F2A93B'; g.font = '10px ui-monospace,Menlo,monospace';
+    g.fillText(f.label, x + 8, y - 6);
+  }
+}
+
+/* ---- attenuation along the ray ----
+   Beer-Lambert in the path length s, times an optional loss at each bounce:
+   I(s,k) = exp(-s/len) * (1-loss)^k .  Alpha is quantised into a few levels so
+   the whole beam still draws in a handful of batched strokes.            */
+const FADE_LEVELS = 16, FADE_CUT = 0.015;
+const fadeVal = i => (i + 1) / FADE_LEVELS;
+const fadeLevel = a => clamp(Math.round(a * FADE_LEVELS) - 1, 0, FADE_LEVELS - 1);
+function fadeAlpha(s, k) {
+  const f = S.fade;
+  if (!f.on) return 1;
+  const a = Math.exp(-s / Math.max(0.02, f.len));
+  return f.loss > 0 ? a * Math.pow(1 - f.loss, k) : a;
+}
+
+function drawFadedRays(g, sets, stride, map) {
+  g.globalCompositeOperation = 'lighter'; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const rs of sets) {
+    const paths = [], used = [];
+    for (let i = 0; i < FADE_LEVELS; i++) { paths.push(new Path2D()); used.push(false); }
+    for (let ip = 0; ip < rs.polys.length; ip++) {
+      const p = rs.polys[ip];
+      const w = rs.wts ? rs.wts[ip] : 1, kb = rs.k0 ? rs.k0[ip] : 0;
+      let s = rs.s0 ? rs.s0[ip] : 0;
+      for (let i = stride; i < p.length; i += stride) {
+        const k = kb + i / stride - 1;                  // bounces before this leg
+        const ax = p[i - stride], ay = p[i - stride + 1], az = stride === 3 ? p[i - stride + 2] : 0;
+        const bx = p[i], by = p[i + 1], bz = stride === 3 ? p[i + 2] : 0;
+        const len = Math.hypot(bx - ax, by - ay, bz - az);
+        const a0 = fadeAlpha(s, k) * w;
+        if (a0 < FADE_CUT) break;
+        const n = clamp(Math.abs(fadeLevel(a0) - fadeLevel(fadeAlpha(s + len, k) * w)) + 1, 1, 24);
+        let prev = map(ax, ay, az);
+        for (let c = 1; c <= n; c++) {
+          const t = c / n;
+          const cur = map(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t);
+          const am = fadeAlpha(s + len * (c - 0.5) / n, k) * w;
+          if (prev && cur && am >= FADE_CUT) {
+            const L = fadeLevel(am);
+            paths[L].moveTo(prev[0], prev[1]); paths[L].lineTo(cur[0], cur[1]); used[L] = true;
+          }
+          prev = cur;
+        }
+        s += len;
+      }
+    }
+    g.strokeStyle = rs.color;
+    for (const pass of [[0.10, 4.5], [0.85, 1.1]]) {
+      g.lineWidth = pass[1];
+      for (let i = 0; i < FADE_LEVELS; i++) {
+        if (!used[i]) continue;
+        g.globalAlpha = pass[0] * fadeVal(i);
+        g.stroke(paths[i]);
+      }
+    }
+  }
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+}
+
+function drawRays(g) {
+  drawFadedRays(g, S.raysets, 2, (x, y) => [sx(x), sy(y)]);
+}
+
+function drawSources(g) {
+  for (const s of S.sources) {
+    const selected = S.sel && S.sel.kind === 'src' && S.sel.id === s.id;
+    const x = sx(s.x), y = sy(s.y), c = Math.cos(s.rot), sn = Math.sin(s.rot);
+    g.strokeStyle = selected ? '#FF5D8F' : s.color; g.fillStyle = s.color;
+    g.lineWidth = selected ? 2 : 1.5;
+    g.beginPath(); g.arc(x, y, 7, 0, TAU); g.stroke();
+    g.globalAlpha = s.on ? 0.9 : 0.25; g.beginPath(); g.arc(x, y, 3.2, 0, TAU); g.fill(); g.globalAlpha = 1;
+    const L = 26;
+    g.beginPath(); g.moveTo(x + c * 8, y - sn * 8); g.lineTo(x + c * L, y - sn * L); g.stroke();
+    g.beginPath();
+    g.moveTo(x + c * L, y - sn * L);
+    g.lineTo(x + c * (L - 7) - sn * 4, y - sn * (L - 7) - c * 4);
+    g.lineTo(x + c * (L - 7) + sn * 4, y - sn * (L - 7) + c * 4);
+    g.closePath(); g.fill();
+    if (selected) {
+      const R = 54, hx = x + c * R, hy = y - sn * R;
+      g.fillStyle = '#FF5D8F'; g.beginPath(); g.arc(hx, hy, 5, 0, TAU); g.fill();
+    }
+  }
+}
+
+function drawMeasure(g) {
+  const m = S.measure, a = m.a, b = m.b || m.live;
+  if (!a) return;
+  g.strokeStyle = '#F2A93B'; g.lineWidth = 1.4; g.setLineDash([5, 4]);
+  if (b) { g.beginPath(); g.moveTo(sx(a.x), sy(a.y)); g.lineTo(sx(b.x), sy(b.y)); g.stroke(); }
+  g.setLineDash([]);
+  for (const p of [a, b]) {
+    if (!p) continue;
+    g.beginPath(); g.arc(sx(p.x), sy(p.y), 4, 0, TAU); g.stroke();
+  }
+  if (b) {
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const mx = (sx(a.x) + sx(b.x)) / 2, my = (sy(a.y) + sy(b.y)) / 2;
+    const txt = d >= 1 ? fmt(d, 4) + ' m' : d >= 0.01 ? fmt(d * 100, 2) + ' cm' : fmt(d * 1000, 2) + ' mm';
+    g.font = '12px ui-monospace,Menlo,monospace';
+    const w = g.measureText(txt).width + 12;
+    g.fillStyle = 'rgba(8,11,16,.88)'; g.fillRect(mx - w / 2, my - 22, w, 18);
+    g.strokeStyle = 'rgba(242,169,59,.55)'; g.strokeRect(mx - w / 2, my - 22, w, 18);
+    g.fillStyle = '#F2A93B'; g.textAlign = 'center'; g.fillText(txt, mx, my - 9); g.textAlign = 'left';
+  }
+}
+
+function drawSnap(g) {
+  if (!SNAP) return;
+  g.strokeStyle = '#8CE04A'; g.lineWidth = 1.2;
+  g.beginPath(); g.arc(sx(SNAP.x), sy(SNAP.y), 7, 0, TAU); g.stroke();
+}
+
+function render2() {
+  const g = CTX;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#080B10'; g.fillRect(0, 0, W, H);
+  if (S.show.grid) drawGrid(g);
+  drawObjects(g);
+  drawRays(g);
+  drawSources(g);
+  drawMeasure(g);
+  if (S.mode !== 'select') drawSnap(g);
+  drawScaleBar(g);
+}
+
+/* ============================================================
+   INTERACTION (2D)
+   ============================================================ */
+let DRAG = null, SNAP = null, MOUSE = { x: 0, y: 0 };
+const FINE_GAIN = 0.1;                       // alt / ctrl drag moves a tenth as far
+const isFine = e => !!(e && (e.altKey || e.ctrlKey));
+const wrapPi = a => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+
+function segDistPx(px, py, s) {
+  const ax = sx(s.ax), ay = sy(s.ay), bx = sx(s.bx), by = sy(s.by);
+  const ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+  let t = L2 ? ((px - ax) * ex + (py - ay) * ey) / L2 : 0;
+  t = clamp(t, 0, 1);
+  return Math.hypot(px - (ax + ex * t), py - (ay + ey * t));
+}
+
+function snapPoints() {
+  const pts = [];
+  for (const o of S.objects) {
+    pts.push({ x: o.x, y: o.y, tag: o.name + ' origin' });
+    if (o._foci) for (const f of o._foci) pts.push({ x: f.x, y: f.y, tag: o.name + ' ' + f.label });
+    if (o._segs) for (let i = 0; i < o._segs.length; i += 4) pts.push({ x: o._segs[i].ax, y: o._segs[i].ay, tag: o.name });
+    const last = o._segs && o._segs[o._segs.length - 1];
+    if (last) pts.push({ x: last.bx, y: last.by, tag: o.name });
+  }
+  for (const s of S.sources) pts.push({ x: s.x, y: s.y, tag: s.name });
+  for (const h of S.hits) pts.push({ x: h.x, y: h.y, tag: 'ray hit' });
+  return pts;
+}
+
+function findSnap(px, py) {
+  let best = null, bd = 15;
+  for (const p of snapPoints()) {
+    const d = Math.hypot(px - sx(p.x), py - sy(p.y));
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+
+function pick(px, py) {
+  const sel = S.sel;
+  if (sel) {
+    const item = sel.kind === 'obj' ? S.objects.find(o => o.id === sel.id) : S.sources.find(s => s.id === sel.id);
+    if (item) {
+      const hx = sx(item.x) + Math.cos(item.rot) * 54, hy = sy(item.y) - Math.sin(item.rot) * 54;
+      if (Math.hypot(px - hx, py - hy) < 11) return { type: 'rot', item };
+      if (sel.kind === 'obj') {
+        const th = trimHandles(item);
+        if (th) {
+          if (Math.hypot(px - sx(th.a.x), py - sy(th.a.y)) < 9) return { type: 'trimA', item };
+          if (Math.hypot(px - sx(th.b.x), py - sy(th.b.y)) < 9) return { type: 'trimB', item };
+        }
+      }
+    }
+  }
+  for (let i = S.sources.length - 1; i >= 0; i--) {
+    const s = S.sources[i];
+    if (Math.hypot(px - sx(s.x), py - sy(s.y)) < 12) return { type: 'move', item: s };
+  }
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    if (Math.hypot(px - sx(o.x), py - sy(o.y)) < 10) return { type: 'move', item: o };
+  }
+  for (let i = S.objects.length - 1; i >= 0; i--) {
+    const o = S.objects[i];
+    for (const s of o._segs) if (segDistPx(px, py, s) < 7) return { type: 'move', item: o };
+  }
+  return null;
+}
+
+function onDown(e) {
+  const c = cv(), r = c.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  c.setPointerCapture(e.pointerId);
+
+  if (S.dim === 3) { DRAG = { type: e.shiftKey ? 'cam-pan' : 'orbit', px, py }; return; }
+
+  if (S.mode === 'measure' || S.mode === 'calibrate') {
+    const sn = findSnap(px, py);
+    const p = sn ? { x: sn.x, y: sn.y } : { x: wx(px), y: wy(py) };
+    if (S.mode === 'measure') {
+      if (!S.measure.a || S.measure.b) { S.measure.a = p; S.measure.b = null; }
+      else { S.measure.b = p; }
+      updateReadout();
+    } else {
+      if (!S.calib.a) { S.calib.a = p; S.measure.a = p; S.measure.b = null; }
+      else {
+        const d = Math.hypot(p.x - S.calib.a.x, p.y - S.calib.a.y);
+        const want = parseFloat(prompt('That span in metres:', fmt(d, 3)));
+        if (isFinite(want) && want > 0 && d > 1e-9) {
+          // the drawn span becomes `want` metres: grow geometry, shrink view so nothing jumps
+          const k = want / d;
+          S.view.ppm = clamp(S.view.ppm / k, 2, 40000);
+          rescaleWorld(k);
+        }
+        S.calib.a = null; S.measure.a = null; S.measure.b = null; setMode('select');
+      }
+    }
+    return;
+  }
+
+  const hit = pick(px, py);
+  if (hit) {
+    S.sel = { kind: hit.item.kind, id: hit.item.id };
+    DRAG = hit.type === 'rot'
+      ? { type: 'rot', item: hit.item, fine: isFine(e), a0: Math.atan2(sy(hit.item.y) - py, px - sx(hit.item.x)), r0: hit.item.rot }
+      : hit.type === 'trimA' || hit.type === 'trimB'
+        ? { type: hit.type, item: hit.item, prof: profileWorld(hit.item) }
+        : { type: 'move', item: hit.item, fine: isFine(e), ax: wx(px), ay: wy(py), ox: hit.item.x, oy: hit.item.y };
+    buildInspector(); renderList();
+  } else {
+    DRAG = { type: 'pan', px, py, cx: S.view.cx, cy: S.view.cy, moved: false };
+  }
+}
+
+function onMove(e) {
+  const c = cv(), r = c.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  MOUSE = { x: px, y: py };
+
+  if (S.dim === 3) {
+    if (DRAG && DRAG.type === 'orbit') {
+      S.cam.yaw += (px - DRAG.px) * 0.008;
+      S.cam.pitch = clamp(S.cam.pitch + (py - DRAG.py) * 0.008, -1.5, 1.5);
+      DRAG.px = px; DRAG.py = py;
+    } else if (DRAG && DRAG.type === 'cam-pan') {
+      S.cam.tx -= (px - DRAG.px) * 0.004 * S.cam.dist;
+      S.cam.ty += (py - DRAG.py) * 0.004 * S.cam.dist;
+      DRAG.px = px; DRAG.py = py;
+    }
+    return;
+  }
+
+  if (S.mode !== 'select') {
+    SNAP = findSnap(px, py);
+    if (S.measure.a && !S.measure.b) S.measure.live = SNAP ? { x: SNAP.x, y: SNAP.y } : { x: wx(px), y: wy(py) };
+  }
+  if (DRAG) {
+    const fine = isFine(e);
+    if (DRAG.type === 'trimA' || DRAG.type === 'trimB') {
+      const mx = wx(px), my = wy(py);
+      let best = Infinity, bt = 0;
+      for (const q of DRAG.prof) { const d = (q.x - mx) * (q.x - mx) + (q.y - my) * (q.y - my); if (d < best) { best = d; bt = q.t; } }
+      const tr = trimOf(DRAG.item); DRAG.item.trim = tr;
+      if (DRAG.type === 'trimA') tr.a = clamp(bt, 0, tr.b - 0.001);
+      else tr.b = clamp(bt, tr.a + 0.001, 1);
+      onEdit();
+    } else if (DRAG.type === 'move') {
+      if (fine !== DRAG.fine) {                       // re-anchor so the shape never jumps
+        DRAG.ax = wx(px); DRAG.ay = wy(py); DRAG.ox = DRAG.item.x; DRAG.oy = DRAG.item.y; DRAG.fine = fine;
+      }
+      const g = fine ? FINE_GAIN : 1;
+      let nx = DRAG.ox + (wx(px) - DRAG.ax) * g, ny = DRAG.oy + (wy(py) - DRAG.ay) * g;
+      if (e.shiftKey) { const st = niceStep(S.view.ppm) / 5; nx = Math.round(nx / st) * st; ny = Math.round(ny / st) * st; }
+      DRAG.item.x = nx; DRAG.item.y = ny;
+      onEdit();
+    } else if (DRAG.type === 'rot') {
+      const cur = Math.atan2(sy(DRAG.item.y) - py, px - sx(DRAG.item.x));
+      if (fine !== DRAG.fine) { DRAG.a0 = cur; DRAG.r0 = DRAG.item.rot; DRAG.fine = fine; }
+      let a = fine ? DRAG.r0 + wrapPi(cur - DRAG.a0) * FINE_GAIN : cur;
+      if (e.shiftKey && !fine) a = Math.round(a / (15 * D2R)) * 15 * D2R;
+      DRAG.item.rot = a; onEdit();
+    } else if (DRAG.type === 'pan') {
+      S.view.cx = DRAG.cx - (px - DRAG.px) / S.view.ppm;
+      S.view.cy = DRAG.cy + (py - DRAG.py) / S.view.ppm;
+      DRAG.moved = DRAG.moved || Math.hypot(px - DRAG.px, py - DRAG.py) > 3;
+    }
+  }
+  updateReadout();
+}
+
+function onUp(e) {
+  if (DRAG && DRAG.type === 'pan' && !DRAG.moved && S.mode === 'select') {
+    S.sel = null; buildInspector(); renderList();
+  } else if (DRAG && DRAG.type !== 'pan') {
+    buildInspector();
+  }
+  DRAG = null; updateReadout();
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  if (S.dim === 3) { S.cam.dist = clamp(S.cam.dist * Math.exp(e.deltaY * (isFine(e) ? 0.0003 : 0.0012)), 0.4, 200); return; }
+  const c = cv(), r = c.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const bx = wx(px), by = wy(py);
+  S.view.ppm = clamp(S.view.ppm * Math.exp(-e.deltaY * (isFine(e) ? 0.0003 : 0.0012)), 2, 40000);
+  S.view.cx = bx - (px - W / 2) / S.view.ppm;
+  S.view.cy = by + (py - H / 2) / S.view.ppm;
+  updateReadout();
+}
+
+function rescaleWorld(k) {
+  for (const o of S.objects) {
+    o.x *= k; o.y *= k;
+    for (const key in o.params) if (typeof o.params[key] === 'number' && key !== 'span' && key !== 'ang') o.params[key] *= k;
+    o.depth *= k;
+  }
+  for (const s of S.sources) { s.x *= k; s.y *= k; s.width *= k; }
+  S.fade.len = clamp(S.fade.len * k, 0.1, 100); syncFade();
+  onEdit(true);
+}
+
+function onEdit(full) {
+  rebuildScene();
+  if (full) buildInspector();
+  else { const it = selected(); if (it && it.role === 'receiver') updateRx(it); }
+  updateReadout();
+}
+
+/* ============================================================
+   3D: revolve / extrude the 2D profile, trace, render
+   ============================================================ */
+function runsOf(o) {
+  const pr = paramize(profileOf(o)), runs = [];
+  for (const pa of pr.paths) {
+    let cur = null;
+    for (let i = 0; i < pa.pts.length - 1; i++) {
+      const p0 = pa.pts[i], p1 = pa.pts[i + 1];
+      const tm = (p0.t + p1.t) / 2;
+      if (isTrimmed(o, tm) || isCut(o, tm)) { cur = null; continue; }
+      if (!cur) { cur = [p0]; runs.push(cur); }
+      cur.push(p1);
+    }
+  }
+  return { runs, foci: pr.foci, axis: pr.axis };
+}
+
+function decimate(run, maxN) {
+  if (run.length <= maxN) return run;
+  const step = Math.ceil(run.length / maxN), out = [];
+  for (let i = 0; i < run.length; i += step) out.push(run[i]);
+  if (out[out.length - 1] !== run[run.length - 1]) out.push(run[run.length - 1]);
+  return out;
+}
+
+/* keep only the half-plane that revolution needs (radius >= 0) */
+function halfRuns(runs, axis) {
+  const key = axis === 'y' ? 'x' : 'y', nkey = axis === 'y' ? 'nx' : 'ny', out = [];
+  const split = (run, sign) => {
+    const parts = []; let cur = null;
+    for (const p of run) {
+      if (p[key] * sign >= -1e-9) {
+        if (!cur) { cur = []; parts.push(cur); }
+        cur.push(sign > 0 ? p : { x: p.x, y: p.y, nx: p.nx, ny: p.ny, t: p.t, [key]: -p[key], [nkey]: -p[nkey] });
+      } else cur = null;
+    }
+    return parts.filter(r => r.length > 1);
+  };
+  for (const run of runs) {
+    const up = split(run, 1), dn = split(run, -1);
+    const nUp = up.reduce((a, r) => a + r.length, 0), nDn = dn.reduce((a, r) => a + r.length, 0);
+    for (const r of (nUp >= nDn ? up : dn)) out.push(r);   // a profile below the axis sweeps the same solid
+  }
+  return out;
+}
+
+/* sweep a set of 2D runs into triangles: revolve about the optical axis, or
+   extrude sideways. Returns non-indexed triangles plus a sparse wire cage. */
+
+/* Orientation in 3D is three angles applied local -> world in the order
+   roll (about the body's own optical axis, +x), then tilt (lifts that axis out
+   of the bench plane), then yaw (the rotation the 2D view already shows).
+   Yaw alone reproduces the old planar behaviour exactly. */
+function orient(yaw, tilt, roll) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const ct = Math.cos(tilt), st = Math.sin(tilt);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  // Rz(yaw) . Ry'(tilt) . Rx(roll), with Ry' signed so positive tilt raises +x toward +z
+  const m00 = ct, m01 = -st * sr, m02 = -st * cr;
+  const m10 = 0, m11 = cr, m12 = -sr;
+  const m20 = st, m21 = ct * sr, m22 = ct * cr;
+  return [
+    cy * m00 - sy * m10, cy * m01 - sy * m11, cy * m02 - sy * m12,
+    sy * m00 + cy * m10, sy * m01 + cy * m11, sy * m02 + cy * m12,
+    m20, m21, m22
+  ];
+}
+const orientOf = o => orient(o.rot || 0, o.tilt || 0, o.roll || 0);
+
+function sweepGrid(o, use, mode, K, axis) {
+    const cols = K + 1;
+    const RM = orientOf(o);            // note: `M` is taken further down (rows*cols)
+
+    let nTri = 0;
+    for (const run of use) nTri += (run.length - 1) * K * 2;
+    const pos = new Float32Array(nTri * 9), nrm = new Float32Array(nTri * 9);
+    const wire = [];
+    let pi = 0;
+
+    for (const run of use) {
+      const rows = run.length, M = rows * cols;
+      const gx = new Float32Array(M), gy = new Float32Array(M), gz = new Float32Array(M);
+      const ax_ = new Float32Array(M), ay_ = new Float32Array(M), az_ = new Float32Array(M);
+      for (let i = 0; i < rows; i++) {
+        const q = run[i];
+        for (let j = 0; j < cols; j++) {
+          let lx, ly, lz, mx, my, mz;
+          if (mode === 'extrude') {
+            lx = q.x; ly = q.y; lz = -o.depth / 2 + o.depth * j;
+            mx = q.nx; my = q.ny; mz = 0;
+          } else {
+            const f = TAU * j / K, cf = Math.cos(f), sf = Math.sin(f);
+            if (axis === 'y') { lx = q.x * cf; ly = q.y; lz = q.x * sf; mx = q.nx * cf; my = q.ny; mz = q.nx * sf; }
+            else { lx = q.x; ly = q.y * cf; lz = q.y * sf; mx = q.nx; my = q.ny * cf; mz = q.ny * sf; }
+          }
+          const k = i * cols + j;
+          gx[k] = o.x + RM[0] * lx + RM[1] * ly + RM[2] * lz;
+          gy[k] = o.y + RM[3] * lx + RM[4] * ly + RM[5] * lz;
+          gz[k] =       RM[6] * lx + RM[7] * ly + RM[8] * lz;
+          ax_[k] = RM[0] * mx + RM[1] * my + RM[2] * mz;
+          ay_[k] = RM[3] * mx + RM[4] * my + RM[5] * mz;
+          az_[k] = RM[6] * mx + RM[7] * my + RM[8] * mz;
+        }
+      }
+      const put = k => {
+        pos[pi] = gx[k]; pos[pi + 1] = gy[k]; pos[pi + 2] = gz[k];
+        nrm[pi] = ax_[k]; nrm[pi + 1] = ay_[k]; nrm[pi + 2] = az_[k]; pi += 3;
+      };
+      for (let i = 0; i < rows - 1; i++) for (let j = 0; j < cols - 1; j++) {
+        const a = i * cols + j, b = a + 1, d = a + cols, e = d + 1;
+        put(a); put(b); put(e); put(a); put(e); put(d);
+      }
+      const jStep = Math.max(1, Math.round(K / 12)), iStep = Math.max(1, Math.round((rows - 1) / 8));
+      const seg = (k1, k2) => wire.push(gx[k1], gy[k1], gz[k1], gx[k2], gy[k2], gz[k2]);
+      for (let j = 0; j < cols; j += jStep) for (let i = 0; i < rows - 1; i++) seg(i * cols + j, (i + 1) * cols + j);
+      for (let i = 0; i < rows; i += iStep) for (let j = 0; j < cols - 1; j++) seg(i * cols + j, i * cols + j + 1);
+      if ((rows - 1) % iStep) for (let j = 0; j < cols - 1; j++) seg((rows - 1) * cols + j, (rows - 1) * cols + j + 1);
+    }
+  return { pos, nrm, wire: new Float32Array(wire) };
+}
+
+/* ---- shading tables -------------------------------------------------
+   Colour per triangle is looked up, never built, during a frame. Each body
+   gets 33 steps from shadow to highlight, in four variants: front / back
+   face, normal / selected.                                              */
+const SHADE_N = 32;
+function hexToRgb(h) {
+  const v = parseInt((h || '#6D8FB0').slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+function shadeTable(hex, role, sel, back) {
+  let [r, g, b] = hexToRgb(hex);
+  if (sel) { r = r * 0.55 + 255 * 0.45; g = g * 0.55 + 93 * 0.45; b = b * 0.55 + 143 * 0.45; }
+  if (role === 'absorber') { r *= 0.42; g *= 0.44; b *= 0.5; }
+  if (back) { r *= 0.6; g *= 0.64; b *= 0.74; }           // inside faces read cooler
+  const alpha = role === 'lens' ? 0.42 : role === 'receiver' ? 0.9 : 0.97;
+  const amb = role === 'receiver' ? 0.4 : 0.2;
+  const out = new Array(SHADE_N + 1);
+  for (let i = 0; i <= SHADE_N; i++) {
+    const t = i / SHADE_N, k = amb + (1 - amb) * t * t, spec = 42 * Math.pow(t, 7);
+    out[i] = 'rgba(' + Math.round(clamp(r * k + spec, 0, 255)) + ','
+                     + Math.round(clamp(g * k + spec, 0, 255)) + ','
+                     + Math.round(clamp(b * k + spec, 0, 255)) + ',' + alpha + ')';
+  }
+  return out;
+}
+
+function buildMesh3() {
+  S.mesh3 = [];
+  const busy = S.objects.length > 2;
+  for (const o of S.objects) {
+    const { runs, foci, axis } = runsOf(o);
+    const mode = o.d3 === 'extrude' ? 'extrude' : 'revolve';
+    const base = (mode === 'revolve' ? halfRuns(runs, axis) : runs);
+    const K = mode === 'revolve' ? clamp(o.revSteps | 0, 6, 128) : 1;
+    const RM = orientOf(o);
+
+    /* the tracer gets the full-resolution sweep ... */
+    const fine = sweepGrid(o, base.map(r => decimate(r, 90)), mode, K, axis);
+    /* ... the renderer gets a lighter one, so a frame stays cheap */
+    const Kr = mode === 'revolve' ? Math.min(K, busy ? 22 : 32) : 1;
+    const shade = sweepGrid(o, base.map(r => decimate(r, busy ? 22 : 30)), mode, Kr, axis);
+
+    const nT = shade.pos.length / 9;
+    const cen = new Float32Array(nT * 3), fn = new Float32Array(nT * 3);
+    for (let i = 0; i < nT; i++) {
+      const p = i * 9, k = i * 3;
+      cen[k] = (shade.pos[p] + shade.pos[p + 3] + shade.pos[p + 6]) / 3;
+      cen[k + 1] = (shade.pos[p + 1] + shade.pos[p + 4] + shade.pos[p + 7]) / 3;
+      cen[k + 2] = (shade.pos[p + 2] + shade.pos[p + 5] + shade.pos[p + 8]) / 3;
+      const nx = shade.nrm[p] + shade.nrm[p + 3] + shade.nrm[p + 6];
+      const ny = shade.nrm[p + 1] + shade.nrm[p + 4] + shade.nrm[p + 7];
+      const nz = shade.nrm[p + 2] + shade.nrm[p + 5] + shade.nrm[p + 8];
+      const l = Math.hypot(nx, ny, nz) || 1;
+      fn[k] = nx / l; fn[k + 1] = ny / l; fn[k + 2] = nz / l;
+    }
+
+    const pos = fine.pos, nrm = fine.nrm;
+    let cx = 0, cy = 0, cz = 0;
+    const nv = pos.length / 3;
+    for (let i = 0; i < pos.length; i += 3) { cx += pos[i]; cy += pos[i + 1]; cz += pos[i + 2]; }
+    if (nv) { cx /= nv; cy /= nv; cz /= nv; }
+    let r = 0;
+    for (let i = 0; i < pos.length; i += 3) r = Math.max(r, Math.hypot(pos[i] - cx, pos[i + 1] - cy, pos[i + 2] - cz));
+    const bvh = buildBVH(pos, nrm);
+    const col = o.color3 || '#6D8FB0';
+    S.mesh3.push({
+      obj: o, pos: bvh.pos, nrm: bvh.nrm, nodes: bvh.nodes,
+      spos: shade.pos, scen: cen, snrm: fn, nTri: nT,
+      wire: shade.wire, cx, cy, cz, r: r + 1e-6,
+      sh: [[shadeTable(col, o.role, false, false), shadeTable(col, o.role, false, true)],
+           [shadeTable(col, o.role, true, false), shadeTable(col, o.role, true, true)]],
+      edge: o.role === 'lens' ? 'rgba(200,220,255,.30)' : 'rgba(10,14,20,.34)',
+      foci: foci.map(f => ({
+        x: o.x + RM[0] * f.x + RM[1] * f.y, y: o.y + RM[3] * f.x + RM[4] * f.y,
+        z: RM[6] * f.x + RM[7] * f.y, label: f.label
+      }))
+    });
+  }
+}
+
+function emit3(src) {
+  const rays = [], N = Math.max(1, src.count | 0);
+  const GA = Math.PI * (3 - Math.sqrt(5));
+  const M = orientOf(src);
+  const R = (x, y, z) => [M[0] * x + M[1] * y + M[2] * z,
+                          M[3] * x + M[4] * y + M[5] * z,
+                          M[6] * x + M[7] * y + M[8] * z];
+  for (let i = 0; i < N; i++) {
+    if (src.type === 'parallel') {
+      const rr = (src.width / 2) * Math.sqrt((i + 0.5) / N), ph = i * GA;
+      // the whole disc offset turns with the beam, so a tilted bundle stays circular
+      const o = R(0, rr * Math.cos(ph), rr * Math.sin(ph)); const d = R(1, 0, 0);
+      rays.push({ o: [src.x + o[0], src.y + o[1], o[2]], d });
+    } else if (src.type === 'fan') {
+      const th = (src.spread / 2 * D2R) * Math.sqrt((i + 0.5) / N), ph = i * GA;
+      const d = R(Math.cos(th), Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph));
+      rays.push({ o: [src.x, src.y, 0], d });
+    } else {
+      const z = 1 - 2 * (i + 0.5) / N, rr = Math.sqrt(Math.max(0, 1 - z * z)), ph = i * GA;
+      const d = R(rr * Math.cos(ph), rr * Math.sin(ph), z);
+      rays.push({ o: [src.x, src.y, 0], d });
+    }
+  }
+  return rays;
+}
+
+/* bounding volume hierarchy over the triangles of one body */
+function buildBVH(pos, nrm) {
+  const n = pos.length / 9;
+  const tri = new Int32Array(n), cen = new Float32Array(n * 3);
+  const bmin = new Float32Array(n * 3), bmax = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    tri[i] = i;
+    for (let k = 0; k < 3; k++) {
+      const a = pos[i * 9 + k], b = pos[i * 9 + 3 + k], c = pos[i * 9 + 6 + k];
+      bmin[i * 3 + k] = Math.min(a, b, c); bmax[i * 3 + k] = Math.max(a, b, c);
+      cen[i * 3 + k] = (a + b + c) / 3;
+    }
+  }
+  const nodes = [];
+  const build = (start, count) => {
+    const nd = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], start, count, l: -1, r: -1 };
+    for (let i = start; i < start + count; i++) {
+      const t = tri[i];
+      for (let k = 0; k < 3; k++) {
+        if (bmin[t * 3 + k] < nd.min[k]) nd.min[k] = bmin[t * 3 + k];
+        if (bmax[t * 3 + k] > nd.max[k]) nd.max[k] = bmax[t * 3 + k];
+      }
+    }
+    const id = nodes.length; nodes.push(nd);
+    if (count > 12) {
+      let ax = 0, ext = -1;
+      for (let k = 0; k < 3; k++) { const e = nd.max[k] - nd.min[k]; if (e > ext) { ext = e; ax = k; } }
+      const sub = Array.from(tri.subarray(start, start + count));
+      sub.sort((a, b) => cen[a * 3 + ax] - cen[b * 3 + ax]);
+      tri.set(sub, start);
+      const half = count >> 1;
+      nd.count = 0;
+      nd.l = build(start, half); nd.r = build(start + half, count - half);
+    }
+    return id;
+  };
+  if (n) build(0, n);
+  const P = new Float32Array(pos.length), N = new Float32Array(nrm.length);
+  for (let i = 0; i < n; i++) { const t = tri[i]; for (let k = 0; k < 9; k++) { P[i * 9 + k] = pos[t * 9 + k]; N[i * 9 + k] = nrm[t * 9 + k]; } }
+  return { nodes, pos: P, nrm: N };
+}
+
+function hitMesh(o, d, best) {
+  let res = null;
+  const inv = [1 / (d[0] || 1e-20), 1 / (d[1] || 1e-20), 1 / (d[2] || 1e-20)];
+  for (const m of S.mesh3) {
+    const ox = o[0] - m.cx, oy = o[1] - m.cy, oz = o[2] - m.cz;
+    const b = ox * d[0] + oy * d[1] + oz * d[2];
+    const cc = ox * ox + oy * oy + oz * oz - m.r * m.r;
+    const disc = b * b - cc;
+    if (disc < 0) continue;
+    const sq = Math.sqrt(disc);
+    if (-b + sq < 1e-6 || -b - sq > best) continue;
+    const p = m.pos, nn = m.nrm, nodes = m.nodes;
+    const stack = [0];
+    while (stack.length) {
+      const nd = nodes[stack.pop()];
+      let t0 = 1e-6, t1 = best, miss = false;
+      for (let k = 0; k < 3; k++) {
+        let a = (nd.min[k] - o[k]) * inv[k], bb = (nd.max[k] - o[k]) * inv[k];
+        if (a > bb) { const tt = a; a = bb; bb = tt; }
+        if (a > t0) t0 = a; if (bb < t1) t1 = bb;
+        if (t0 > t1) { miss = true; break; }
+      }
+      if (miss) continue;
+      if (!nd.count) { stack.push(nd.l, nd.r); continue; }
+      const end = (nd.start + nd.count) * 9;
+      for (let i = nd.start * 9; i < end; i += 9) {          // Moller-Trumbore
+        const ax = p[i], ay = p[i + 1], az = p[i + 2];
+        const e1x = p[i + 3] - ax, e1y = p[i + 4] - ay, e1z = p[i + 5] - az;
+        const e2x = p[i + 6] - ax, e2y = p[i + 7] - ay, e2z = p[i + 8] - az;
+        const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
+        const det = e1x * px + e1y * py + e1z * pz;
+        if (det > -1e-12 && det < 1e-12) continue;
+        const idet = 1 / det;
+        const tx = o[0] - ax, ty = o[1] - ay, tz = o[2] - az;
+        const u = (tx * px + ty * py + tz * pz) * idet;
+        if (u < 0 || u > 1) continue;
+        const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+        const v = (d[0] * qx + d[1] * qy + d[2] * qz) * idet;
+        if (v < 0 || u + v > 1) continue;
+        const t = (e2x * qx + e2y * qy + e2z * qz) * idet;
+        if (t <= 1e-6 || t >= best) continue;
+        const w = 1 - u - v;
+        best = t;
+        res = {
+          t, obj: m.obj,
+          n: [w * nn[i] + u * nn[i + 3] + v * nn[i + 6],
+              w * nn[i + 1] + u * nn[i + 4] + v * nn[i + 7],
+              w * nn[i + 2] + u * nn[i + 5] + v * nn[i + 8]]
+        };
+      }
+    }
+  }
+  return res;
+}
+
+function trace3() {
+  const t0 = performance.now();
+  if (!S.mesh3) buildMesh3();
+  S.rays3 = [];
+  const far = 40;
+  resetRx();
+  for (const src of S.sources) {
+    if (!src.on) continue;
+    const polys = [], seed3 = emit3(src);
+    src._emitted = seed3.length; S.emitted += seed3.length;
+    for (const r of seed3) {
+      let o = r.o.slice(), d = r.d.slice();
+      const dl = Math.hypot(d[0], d[1], d[2]); d = [d[0] / dl, d[1] / dl, d[2] / dl];
+      const pts = [o[0], o[1], o[2]];
+      let ended = false;
+      for (let b = 0; b < S.maxBounces; b++) {
+        const h = hitMesh(o, d, Infinity);
+        if (!h) break;
+        const hx = o[0] + d[0] * h.t, hy = o[1] + d[1] * h.t, hz = o[2] + d[2] * h.t;
+        pts.push(hx, hy, hz);
+        if (h.obj.role === 'receiver') { recordRx(h.obj, src, 0, 1, hx, hy, hz); ended = true; break; }
+        if (h.obj.role === 'absorber') { ended = true; break; }
+        let n = h.n; const nl = Math.hypot(n[0], n[1], n[2]) || 1; n = [n[0] / nl, n[1] / nl, n[2] / nl];
+        if (h.obj.role === 'lens') {
+          const ior = Math.max(1.0001, h.obj.ior || 1.5);
+          const entering = (d[0] * n[0] + d[1] * n[1] + d[2] * n[2]) < 0;
+          if (!entering) n = [-n[0], -n[1], -n[2]];
+          const eta = entering ? 1 / ior : ior;
+          const cosI = -(d[0] * n[0] + d[1] * n[1] + d[2] * n[2]);
+          const kk = 1 - eta * eta * (1 - cosI * cosI);
+          if (kk < 0) d = [d[0] + 2 * cosI * n[0], d[1] + 2 * cosI * n[1], d[2] + 2 * cosI * n[2]];
+          else {
+            const cosT = Math.sqrt(kk), g = eta * cosI - cosT;
+            d = [eta * d[0] + g * n[0], eta * d[1] + g * n[1], eta * d[2] + g * n[2]];
+          }
+        } else {
+          let dot = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+          if (dot > 0) { n = [-n[0], -n[1], -n[2]]; dot = -dot; }
+          d = [d[0] - 2 * dot * n[0], d[1] - 2 * dot * n[1], d[2] - 2 * dot * n[2]];
+        }
+        const dl = Math.hypot(d[0], d[1], d[2]) || 1; d = [d[0] / dl, d[1] / dl, d[2] / dl];
+        o = [hx + d[0] * 1e-6, hy + d[1] * 1e-6, hz + d[2] * 1e-6];
+      }
+      if (!ended) {
+        const L = pts.length;
+        pts.push(pts[L - 3] + d[0] * far, pts[L - 2] + d[1] * far, pts[L - 1] + d[2] * far);
+      }
+      polys.push(pts);
+    }
+    S.rays3.push({ color: src.color, polys });
+  }
+  S.trace3Ms = performance.now() - t0;
+}
+
+/* ---------------- 3D camera + render ---------------- */
+function camBasis() {
+  const { yaw, pitch, dist, tx, ty, tz } = S.cam;
+  const cp = Math.cos(pitch);
+  const ex = tx + dist * cp * Math.cos(yaw), ey = ty + dist * cp * Math.sin(yaw), ez = tz + dist * Math.sin(pitch);
+  let fx = tx - ex, fy = ty - ey, fz = tz - ez;
+  const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+  let rx = fy, ry = -fx, rz = 0;            // right = forward x worldUp(0,0,1)
+  if (Math.hypot(rx, ry) < 1e-6) { rx = 1; ry = 0; }
+  const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+  const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+  return { e: [ex, ey, ez], f: [fx, fy, fz], r: [rx, ry, rz], u: [-ux, -uy, -uz] };
+}
+
+function project(p, B, focal) {
+  const dx = p[0] - B.e[0], dy = p[1] - B.e[1], dz = p[2] - B.e[2];
+  const z = dx * B.f[0] + dy * B.f[1] + dz * B.f[2];
+  if (z < 0.02) return null;
+  const x = dx * B.r[0] + dy * B.r[1] + dz * B.r[2];
+  const y = dx * B.u[0] + dy * B.u[1] + dz * B.u[2];
+  return [W / 2 + focal * x / z, H / 2 + focal * y / z, z];
+}
+
+function line3(g, a, b, B, focal) {
+  const A = project(a, B, focal), C = project(b, B, focal);
+  if (!A || !C) return;
+  g.moveTo(A[0], A[1]); g.lineTo(C[0], C[1]);
+}
+
+/* ---- one sorted draw list holds both surfaces and rays, so a ray that runs
+   behind a mirror is painted over by it instead of floating on top ---- */
+let D_Z = null, D_KEY = null, D_N = 0;
+const TPX = new Float32Array(3), TPY = new Float32Array(3);
+let RX0 = null, RY0 = null, RX1 = null, RY1 = null, R_LVL = null, R_SET = null, R_N = 0;
+
+function needCap(n) {
+  if (D_Z && D_Z.length >= n) return;
+  const z = new Float32Array(n * 2), k = new Uint32Array(n * 2);
+  if (D_Z) { z.set(D_Z); k.set(D_KEY); }
+  D_Z = z; D_KEY = k;
+}
+function needRay(n) {
+  if (!RX0 || RX0.length < n) {
+    RX0 = new Float32Array(n * 2); RY0 = new Float32Array(n * 2);
+    RX1 = new Float32Array(n * 2); RY1 = new Float32Array(n * 2);
+    R_LVL = new Uint8Array(n * 2); R_SET = new Uint8Array(n * 2);
+  }
+}
+
+/* chop every ray leg into short screen-space chunks carrying their own depth */
+function buildRayChunks(B, focal) {
+  R_N = 0;
+  let legs = 0;
+  for (const rs of S.rays3) for (const p of rs.polys) legs += p.length / 3 - 1;
+  const budget = DRAG ? 2600 : 6000;                 // orbiting stays responsive
+  const perLeg = clamp(Math.floor(budget / Math.max(1, legs)), 1, DRAG ? 14 : 40);
+  needRay(legs * perLeg + 16);
+  needCap(D_N + legs * perLeg + 16);
+  for (let si = 0; si < S.rays3.length; si++) {
+    const rs = S.rays3[si];
+    for (const p of rs.polys) {
+      let s = 0;
+      for (let i = 3; i < p.length; i += 3) {
+        const k = i / 3 - 1;
+        const ax = p[i - 3], ay = p[i - 2], az = p[i - 1];
+        const bx = p[i], by = p[i + 1], bz = p[i + 2];
+        const len = Math.hypot(bx - ax, by - ay, bz - az);
+        const a0 = fadeAlpha(s, k);
+        if (a0 < FADE_CUT) break;
+        const fadeN = Math.abs(fadeLevel(a0) - fadeLevel(fadeAlpha(s + len, k))) + 1;
+        const n = clamp(Math.max(fadeN, Math.ceil(len / 0.12)), 1, perLeg);
+        let prev = project([ax, ay, az], B, focal);
+        for (let c = 1; c <= n; c++) {
+          const t = c / n;
+          const cur = project([ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t], B, focal);
+          const am = fadeAlpha(s + len * (c - 0.5) / n, k);
+          if (prev && cur && am >= FADE_CUT) {
+            const q = R_N++;
+            RX0[q] = prev[0]; RY0[q] = prev[1]; RX1[q] = cur[0]; RY1[q] = cur[1];
+            R_LVL[q] = fadeLevel(am); R_SET[q] = si;
+            D_Z[D_N] = (prev[2] + cur[2]) * 0.5; D_KEY[D_N] = 0x80000000 | q; D_N++;
+          }
+          prev = cur;
+        }
+        s += len;
+      }
+    }
+  }
+}
+
+/* bucket sort, far to near — O(n) and it groups similar depths, which keeps
+   the batches long */
+function paintOrder() {
+  let z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < D_N; i++) { const z = D_Z[i]; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  const NB = 4096, span = (z1 - z0) || 1;
+  const cnt = new Int32Array(NB + 1);
+  const bk = new Int32Array(D_N);
+  for (let i = 0; i < D_N; i++) {
+    const b = NB - 1 - Math.min(NB - 1, ((D_Z[i] - z0) / span * (NB - 1)) | 0);
+    bk[i] = b; cnt[b + 1]++;
+  }
+  for (let i = 0; i < NB; i++) cnt[i + 1] += cnt[i];
+  const out = new Uint32Array(D_N);
+  for (let i = 0; i < D_N; i++) out[cnt[bk[i]]++] = i;
+  return out;
+}
+
+function render3() {
+  const g = CTX;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#080B10'; g.fillRect(0, 0, W, H);
+  const B = camBasis(), focal = H / (2 * Math.tan(25 * D2R));
+  if (!S.mesh3) buildMesh3();
+
+  // z = 0 reference plane (the 2D bench)
+  if (S.show.grid) {
+    const step = 0.5, ext = 4;
+    g.strokeStyle = 'rgba(120,150,180,.13)'; g.lineWidth = 1; g.beginPath();
+    for (let i = -ext; i <= ext; i += step) {
+      line3(g, [i, -ext, 0], [i, ext, 0], B, focal);
+      line3(g, [-ext, i, 0], [ext, i, 0], B, focal);
+    }
+    g.stroke();
+    g.strokeStyle = 'rgba(140,170,200,.35)'; g.beginPath();
+    line3(g, [-ext, 0, 0], [ext, 0, 0], B, focal);
+    line3(g, [0, -ext, 0], [0, ext, 0], B, focal);
+    g.stroke();
+  }
+
+  const ex = B.e[0], ey = B.e[1], ez = B.e[2], fx = B.f[0], fy = B.f[1], fz = B.f[2];
+  // key light sits over the camera's shoulder so a body is always legible
+  let lx = fx + 0.55 * B.r[0] - 0.45 * B.u[0];
+  let ly = fy + 0.55 * B.r[1] - 0.45 * B.u[1];
+  let lz = fz + 0.55 * B.r[2] - 0.45 * B.u[2];
+  const ll = Math.hypot(lx, ly, lz) || 1; lx /= ll; ly /= ll; lz /= ll;
+
+  D_N = 0;
+  if (S.solid3) {
+    let tot = 0;
+    for (const m of S.mesh3) tot += m.nTri;
+    needCap(tot + 8);
+    for (let mi = 0; mi < S.mesh3.length; mi++) {
+      const m = S.mesh3[mi], cen = m.scen, n = m.nTri;
+      for (let t = 0; t < n; t++) {
+        const k = t * 3;
+        const z = (cen[k] - ex) * fx + (cen[k + 1] - ey) * fy + (cen[k + 2] - ez) * fz;
+        if (z < 0.02) continue;
+        D_Z[D_N] = z; D_KEY[D_N] = (mi << 20) | t; D_N++;
+      }
+    }
+  }
+  buildRayChunks(B, focal);
+  const order = paintOrder();
+
+  const cxp = W / 2, cyp = H / 2;
+  let curKey = '', path = null, kind = 0;   // 1 = surface fill, 2 = ray stroke
+  const flush = () => {
+    if (!path) return;
+    if (kind === 1) {
+      g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = 1; g.fillStyle = curFill; g.fill(path);
+      g.strokeStyle = curFill; g.lineWidth = 0.6; g.stroke(path);   // seals hairline seams
+    } else {
+      g.globalCompositeOperation = 'lighter';
+      g.strokeStyle = curStroke; g.lineCap = 'round'; g.lineJoin = 'round';
+      g.globalAlpha = 0.16 * curVal; g.lineWidth = 4.6; g.stroke(path);
+      g.globalAlpha = 0.95 * curVal; g.lineWidth = 1.15; g.stroke(path);
+      g.globalAlpha = 0.75 * curVal; g.strokeStyle = '#EAF6FF'; g.lineWidth = 0.5; g.stroke(path);
+    }
+    path = null;
+  };
+  let curFill = '#000', curStroke = '#fff', curVal = 1;
+
+  for (let oi = 0; oi < D_N; oi++) {
+    const key = D_KEY[order[oi]];
+    if (key & 0x80000000) {
+      const q = key & 0x7FFFFFFF, si = R_SET[q], lv = R_LVL[q];
+      const kk = 'r' + si + ':' + lv;
+      if (kk !== curKey || kind !== 2) {
+        flush(); curKey = kk; kind = 2; path = new Path2D();
+        curStroke = S.rays3[si].color; curVal = fadeVal(lv);
+      }
+      path.moveTo(RX0[q], RY0[q]); path.lineTo(RX1[q], RY1[q]);
+    } else {
+      const mi = key >>> 20, t = key & 0xFFFFF, m = S.mesh3[mi];
+      const p = m.spos, b = t * 9, nk = t * 3;
+      const d = m.snrm[nk] * lx + m.snrm[nk + 1] * ly + m.snrm[nk + 2] * lz;
+      const back = d > 0 ? 1 : 0;                      // normals point outward
+      const lev = (clamp(Math.abs(d), 0, 1) * SHADE_N) | 0;
+      const selq = (S.sel && S.sel.kind === 'obj' && S.sel.id === m.obj.id) ? 1 : 0;
+      const kk = 'm' + mi + ':' + back + ':' + lev + ':' + selq;
+      if (kk !== curKey || kind !== 1) {
+        flush(); curKey = kk; kind = 1; path = new Path2D();
+        curFill = m.sh[selq][back][lev];
+      }
+      let ok = true;
+      for (let v = 0; v < 3; v++) {
+        const dx = p[b + v * 3] - ex, dy = p[b + v * 3 + 1] - ey, dz = p[b + v * 3 + 2] - ez;
+        const zz = dx * fx + dy * fy + dz * fz;
+        if (zz < 0.02) { ok = false; break; }
+        TPX[v] = cxp + focal * (dx * B.r[0] + dy * B.r[1] + dz * B.r[2]) / zz;
+        TPY[v] = cyp + focal * (dx * B.u[0] + dy * B.u[1] + dz * B.u[2]) / zz;
+      }
+      if (!ok) continue;                       // a vertex behind the eye: drop the facet
+      path.moveTo(TPX[0], TPY[0]); path.lineTo(TPX[1], TPY[1]); path.lineTo(TPX[2], TPY[2]);
+      path.closePath();
+    }
+  }
+  flush();
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+
+  // wire cage: the whole scene when solids are off, otherwise just the selection
+  for (const m of S.mesh3) {
+    const isSel = S.sel && S.sel.kind === 'obj' && S.sel.id === m.obj.id;
+    if (S.solid3 && !isSel) continue;
+    g.strokeStyle = isSel ? 'rgba(255,93,143,.75)' : m.obj.color3 || '#7FE3F0';
+    g.globalAlpha = S.solid3 ? 0.35 : 0.7;
+    g.lineWidth = isSel ? 1.3 : 1;
+    g.beginPath();
+    const w = m.wire;
+    for (let i = 0; i < w.length; i += 6) line3(g, [w[i], w[i + 1], w[i + 2]], [w[i + 3], w[i + 4], w[i + 5]], B, focal);
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+
+  for (const m of S.mesh3) {
+    if (!S.show.foci) break;
+    for (const f of m.foci) {
+      const p = project([f.x, f.y, f.z], B, focal); if (!p) continue;
+      g.strokeStyle = '#F2A93B'; g.lineWidth = 1.3; g.beginPath();
+      g.moveTo(p[0] - 5, p[1] - 5); g.lineTo(p[0] + 5, p[1] + 5); g.moveTo(p[0] + 5, p[1] - 5); g.lineTo(p[0] - 5, p[1] + 5); g.stroke();
+      if (S.show.labels) { g.fillStyle = '#F2A93B'; g.font = '10px ui-monospace,monospace'; g.fillText(f.label, p[0] + 8, p[1] - 6); }
+    }
+  }
+
+  for (const s of S.sources) {
+    const p = project([s.x, s.y, 0], B, focal); if (!p) continue;
+    g.strokeStyle = s.color; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(p[0], p[1], 6, 0, TAU); g.stroke();
+  }
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+const $ = id => document.getElementById(id);
+function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+
+const ICONS = {
+  plane: '<path d="M2 14h24"/>',
+  circle: '<circle cx="14" cy="10" r="7"/>',
+  arc: '<path d="M20 3a8 8 0 0 0 0 14"/>',
+  parabola: '<path d="M23 2Q4 10 23 18"/>',
+  halfparabola: '<path d="M23 2Q5 10 23 10"/>',
+  halfparabolaY: '<path d="M23 2Q14 5 11.5 8.4"/><path d="M23 18Q14 15 11.5 11.6"/>',
+  ellipse: '<ellipse cx="14" cy="10" rx="11" ry="6"/>',
+  halfellipse: '<path d="M3 12a11 7 0 0 1 22 0"/>',
+  halfellipseY: '<path d="M14 3a11 7 0 0 1 0 14"/><path d="M14 3v14" stroke-dasharray="2 2" opacity=".5"/>',
+  concave: '<path d="M21 2a11 11 0 0 0 0 16"/>',
+  vshape: '<path d="M23 2 7 10l16 8"/>',
+  xshape: '<path d="M4 2l20 16M4 18L24 2"/>',
+  cone: '<path d="M4 2l20 5M4 18l20-5"/>',
+  hyperbola: '<path d="M9 2Q16 10 9 18"/><path d="M25 2q-7 8 0 16" opacity=".38"/>',
+  lens: '<path d="M10 3Q17 10 10 17Q3 10 10 3Z" transform="translate(4)"/>',
+  receiver: '<path d="M8 3v14"/><path d="M8 10h6M14 6v8" opacity=".5"/><circle cx="20" cy="10" r="2.5"/>',
+  dome: '<path d="M9 3v14a8 8 0 0 0 0-14Z"/>',
+  prism: '<path d="M6 17 16 3l10 14Z"/>',
+  tirlens: '<path d="M5 4h18l-4 14H9Z"/><circle cx="14" cy="14" r="3" opacity=".45"/>'
+};
+
+function buildLibrary() {
+  const grid = $('shapeGrid');
+  for (const k in SHAPES) {
+    const b = el('button', 'shape');
+    b.innerHTML = '<svg viewBox="0 0 28 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">' + ICONS[k] + '</svg><span>' + SHAPES[k].label + '</span>';
+    b.onclick = () => addObject(k);
+    grid.appendChild(b);
+  }
+}
+
+function addObject(type) {
+  S.note = '';
+  const o = makeObject(type, S.view.cx, S.view.cy);
+  S.objects.push(o); S.sel = { kind: 'obj', id: o.id };
+  onEdit(true); renderList();
+}
+function addSource() {
+  const s = makeSource(S.view.cx - 1.6, S.view.cy);
+  S.sources.push(s); S.sel = { kind: 'src', id: s.id };
+  onEdit(true); renderList();
+}
+function selected() {
+  if (!S.sel) return null;
+  return S.sel.kind === 'obj' ? S.objects.find(o => o.id === S.sel.id) : S.sources.find(s => s.id === S.sel.id);
+}
+function deleteSelected() {
+  const it = selected(); if (!it) return;
+  if (it.kind === 'obj') S.objects = S.objects.filter(o => o !== it); else S.sources = S.sources.filter(s => s !== it);
+  S.sel = null; onEdit(true); renderList();
+}
+function cleanCopy(it) {
+  const c = Object.assign({}, it);
+  delete c._segs; delete c._foci;
+  c.params = Object.assign({}, it.params);
+  if (it.cuts) c.cuts = it.cuts.map(x => ({ a: x.a, b: x.b }));
+  if (it.trim) c.trim = { a: it.trim.a, b: it.trim.b };
+  return c;
+}
+function duplicateSelected() {
+  const it = selected(); if (!it) return;
+  const c = cleanCopy(it); c.id = uid(); c.x += 0.25; c.y -= 0.25;
+  if (c.kind === 'obj') S.objects.push(c); else { c.name = 'Beam ' + (S.sources.length + 1); S.sources.push(c); }
+  S.sel = { kind: c.kind, id: c.id }; onEdit(true); renderList();
+}
+
+function renderList() {
+  const list = $('sceneList'); list.innerHTML = '';
+  const add = (it, sub) => {
+    const row = el('div', 'item' + (S.sel && S.sel.id === it.id ? ' on' : ''));
+    const dot = el('span', 'dot');
+    dot.style.background = it.kind === 'src' ? it.color
+      : S.dim === 3 ? (it.color3 || '#6D8FB0')
+      : (it.role === 'absorber' ? '#8797AA' : '#7FE3F0');
+    row.appendChild(dot);
+    row.appendChild(el('span', 'nm', it.name));
+    row.appendChild(el('span', 'sub', sub));
+    const x = el('button', 'x', '\u00d7');
+    x.onclick = (ev) => { ev.stopPropagation(); S.sel = { kind: it.kind, id: it.id }; deleteSelected(); };
+    row.appendChild(x);
+    row.onclick = () => { S.sel = { kind: it.kind, id: it.id }; buildInspector(); renderList(); };
+    list.appendChild(row);
+  };
+  for (const s of S.sources) add(s, s.type + ' \u00b7 ' + s.count);
+  for (const o of S.objects) add(o,
+    o.role === 'receiver' ? (S.emitted ? fmt(100 * (o._rx ? o._rx.n : 0) / S.emitted, 1) + '%' : 'receiver')
+    : o.role === 'absorber' ? 'absorber'
+    : o.role === 'lens' ? 'glass n=' + fmt(o.ior || 1.5, 2)
+    : SHAPES[o.type].label.toLowerCase());
+  if (!S.objects.length && !S.sources.length) list.appendChild(el('div', 'empty', 'Nothing here yet. Add a shape or a beam.'));
+}
+
+/* ---- control widgets ---- */
+function ctl(label, unit, val, min, max, step, cb) {
+  const wrap = el('div', 'ctl');
+  const head = el('div', 'ctl-h');
+  head.appendChild(el('span', 'ctl-l', label));
+  const num = el('input', 'ctl-n'); num.type = 'number';
+  num.value = (+val).toFixed(step < 0.001 ? 4 : step < 0.01 ? 3 : step < 1 ? 2 : 1);
+  num.step = step;                     // no min/max: type any value, the slider stays coarse
+  head.appendChild(num);
+  head.appendChild(el('span', 'ctl-u', unit));
+  const rng = el('input', 'ctl-r'); rng.type = 'range'; rng.min = min; rng.max = max; rng.step = step; rng.value = val;
+  const dp = step < 0.001 ? 4 : step < 0.01 ? 3 : step < 1 ? 2 : 1;
+  const fire = v => { cb(v); num.value = (+v).toFixed(dp); rng.value = v; };
+  rng.oninput = () => fire(parseFloat(rng.value));
+  num.oninput = () => { const v = parseFloat(num.value); if (isFinite(v)) { cb(v); rng.value = v; } };
+  wrap.appendChild(head); wrap.appendChild(rng);
+  return wrap;
+}
+function sel(label, opts, val, cb) {
+  const wrap = el('div', 'ctl'), head = el('div', 'ctl-h');
+  head.appendChild(el('span', 'ctl-l', label));
+  const s = el('select', 'ctl-s');
+  for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; s.appendChild(o); }
+  s.value = val; s.onchange = () => cb(s.value);
+  head.appendChild(s); wrap.appendChild(head);
+  return wrap;
+}
+function note(txt) { return el('div', 'note', txt); }
+
+/* An angle has no ends, so neither should its slider. The track always covers
+   +-180 deg either side of where the drag began; on release it recentres on the
+   new value, so the next drag has a fresh 180 deg each way and the total winds
+   up as far as you like. The number box takes any value directly. */
+function angleCtl(label, val, cb) {
+  const wrap = el('div', 'ctl'), head = el('div', 'ctl-h');
+  head.appendChild(el('span', 'ctl-l', label));
+  const num = el('input', 'ctl-n'); num.type = 'number'; num.step = 0.05;
+  num.value = (+val).toFixed(2);
+  head.appendChild(num);
+  head.appendChild(el('span', 'ctl-u', '\u00b0'));
+  const rng = el('input', 'ctl-r'); rng.type = 'range'; rng.step = 0.05;
+  const centre = v => { rng.min = v - 180; rng.max = v + 180; rng.value = v; };
+  centre(val);
+  rng.oninput = () => { const v = parseFloat(rng.value); cb(v); num.value = v.toFixed(2); };
+  const recentre = () => centre(parseFloat(rng.value));
+  rng.onchange = recentre;                       // fires when the drag ends
+  rng.onpointerup = recentre;
+  num.oninput = () => { const v = parseFloat(num.value); if (isFinite(v)) { cb(v); centre(v); } };
+  wrap.appendChild(head); wrap.appendChild(rng);
+  return wrap;
+}
+
+function buildInspector() {
+  const box = $('inspector'); box.innerHTML = '';
+  const it = selected();
+  if (!it) { box.appendChild(el('div', 'empty', 'Select a shape or beam to edit it. Drag the pink handle to rotate.')); return; }
+
+  const h = el('div', 'insp-h');
+  const nameIn = el('input', 'nm-in'); nameIn.value = it.name;
+  nameIn.oninput = () => { it.name = nameIn.value; renderList(); };
+  h.appendChild(nameIn);
+  box.appendChild(h);
+
+  const span = 2.5;                     // slider covers +-2.5 m around here; type for anything further
+  box.appendChild(ctl('Position X', 'm', it.x, it.x - span, it.x + span, 0.001, v => { it.x = v; onEdit(); }));
+  box.appendChild(ctl('Position Y', 'm', it.y, it.y - span, it.y + span, 0.001, v => { it.y = v; onEdit(); }));
+  box.appendChild(angleCtl('Rotation (yaw)', it.rot * R2D, v => { it.rot = v * D2R; onEdit(); }));
+
+  if (it.kind === 'src') {
+    box.appendChild(sel('Beam type', [['parallel', 'Parallel bundle'], ['fan', 'Fan'], ['point', 'Point (360\u00b0)']], it.type, v => { it.type = v; onEdit(true); renderList(); }));
+    box.appendChild(ctl('Ray count', '', it.count, 1, 201, 1, v => { it.count = v | 0; onEdit(); renderList(); }));
+    if (it.type === 'parallel') box.appendChild(ctl('Bundle width', 'm', it.width, 0, 6, 0.01, v => { it.width = v; onEdit(); }));
+    if (it.type === 'fan') box.appendChild(ctl('Fan angle', '\u00b0', it.spread, 0.1, 359, 0.5, v => { it.spread = v; onEdit(); }));
+    box.appendChild(angleCtl('Tilt \u00b7 out of bench plane (3D)', (it.tilt || 0) * R2D, v => { it.tilt = v * D2R; onEdit(); }));
+    const cw = el('div', 'ctl'), ch = el('div', 'ctl-h');
+    ch.appendChild(el('span', 'ctl-l', 'Colour'));
+    const cp = el('input', 'ctl-c'); cp.type = 'color'; cp.value = it.color;
+    cp.oninput = () => { it.color = cp.value; onEdit(); renderList(); };
+    ch.appendChild(cp); cw.appendChild(ch); box.appendChild(cw);
+    const on = el('button', 'wide' + (it.on ? ' on' : ''), it.on ? 'Beam on' : 'Beam off');
+    on.onclick = () => { it.on = !it.on; onEdit(true); }; box.appendChild(on);
+  } else {
+    box.appendChild(el('div', 'div-l', 'Shape'));
+    for (const [k, lab, unit, mn, mx, st] of PARAMS[it.type]) {
+      box.appendChild(ctl(lab, unit, it.params[k], mn, mx, st, v => { it.params[k] = v; onEdit(); updateDerived(it); }));
+    }
+    if (it.type === 'halfparabolaY') {
+      box.appendChild(sel('Keep', [['arms', 'Outer arms (ring)'], ['bowl', 'Vertex bowl']], it.params.keep || 'arms',
+        v => { it.params.keep = v; onEdit(true); }));
+    }
+    if (it.type === 'halfellipseY') {
+      box.appendChild(sel('Keep', [['cap', 'Cap at the +x end'], ['body', 'Everything before the cut']], it.params.keep || 'cap',
+        v => { it.params.keep = v; onEdit(true); }));
+    }
+    if (it.type === 'hyperbola') {
+      const a = it.params.a, c = Math.hypot(a, it.params.b);
+      box.appendChild(ctl('Focal separation 2c', 'm', 2 * c, 0, 12, 0.005, v => {
+        const cc = Math.max(it.params.a * 1.0005, v / 2);
+        it.params.b = Math.sqrt(Math.max(1e-6, cc * cc - it.params.a * it.params.a));
+        onEdit(true);
+      }));
+    }
+    if (it.type === 'ellipse' || it.type === 'halfellipse' || it.type === 'halfellipseY') {
+      const a = it.params.a, b = it.params.b, c = a > b ? Math.sqrt(Math.max(0, a * a - b * b)) : 0;
+      box.appendChild(ctl('Focal separation 2c', 'm', 2 * c, 0, 2 * a, 0.005, v => {
+        const cc = clamp(v / 2, 0, it.params.a * 0.9999);
+        it.params.b = Math.sqrt(Math.max(1e-6, it.params.a * it.params.a - cc * cc));
+        onEdit(true);
+      }));
+    }
+    const fl = el('button', 'wide' + (it.flip ? ' on' : ''), it.flip ? 'Flipped about the axis' : 'Flip about the axis');
+    fl.onclick = () => { it.flip = !it.flip; onEdit(true); };
+    box.appendChild(fl);
+    const rxb = el('div'); rxb.id = 'rxstats'; box.appendChild(rxb);
+    const d = el('div', 'derived'); d.id = 'derived'; box.appendChild(d); updateDerived(it);
+    updateRx(it);
+
+    box.appendChild(el('div', 'div-l', 'Surface'));
+    box.appendChild(sel('Behaviour', [['mirror', 'Mirror (reflects)'], ['lens', 'Glass (refracts)'],
+      ['receiver', 'Receiver (counts arrivals)'], ['absorber', 'Absorber (stops rays)']], it.role,
+      v => { it.role = v; onEdit(true); renderList(); }));
+    if (it.role === 'lens') {
+      box.appendChild(ctl('Refractive index n', '', it.ior || 1.5, 1, 4, 0.001, v => { it.ior = Math.max(1, v); onEdit(); updateDerived(it); }));
+      box.appendChild(note('1.46 fused silica \u00b7 1.49 acrylic \u00b7 1.52 crown glass \u00b7 1.59 polycarbonate \u00b7 2.42 diamond \u00b7 3.4 silicon'));
+    }
+
+    box.appendChild(el('div', 'div-l', 'Trim'));
+    box.appendChild(note('Shortens the surface from either end. Trimmed material is deleted \u2014 it is not drawn and takes no part in the trace.'));
+    const tr = trimOf(it); it.trim = tr;
+    box.appendChild(ctl('Trim from start', '%', tr.a * 100, 0, 100, 0.1,
+      v => { tr.a = clamp(v / 100, 0, tr.b - 0.001); onEdit(); updateDerived(it); }));
+    box.appendChild(ctl('Trim from end', '%', tr.b * 100, 0, 100, 0.1,
+      v => { tr.b = clamp(v / 100, tr.a + 0.001, 1); onEdit(); updateDerived(it); }));
+    const rst = el('button', 'wide', 'Restore the full shape');
+    rst.onclick = () => { it.trim = { a: 0, b: 1 }; onEdit(true); };
+    box.appendChild(rst);
+
+    box.appendChild(el('div', 'div-l', 'Cuts & pinholes'));
+    box.appendChild(note('Cuts remove a span of the surface. Two cuts around a small gap make a pinhole.'));
+    it.cuts.forEach((c, i) => {
+      const w = el('div', 'cut');
+      w.appendChild(el('span', 'cut-i', 'cut ' + (i + 1)));
+      const a = el('input'); a.type = 'range'; a.min = 0; a.max = 1; a.step = 0.001; a.value = c.a;
+      const b = el('input'); b.type = 'range'; b.min = 0; b.max = 1; b.step = 0.001; b.value = c.b;
+      a.oninput = () => { c.a = parseFloat(a.value); onEdit(); };
+      b.oninput = () => { c.b = parseFloat(b.value); onEdit(); };
+      const x = el('button', 'x', '\u00d7'); x.onclick = () => { it.cuts.splice(i, 1); onEdit(true); };
+      w.appendChild(a); w.appendChild(b); w.appendChild(x);
+      box.appendChild(w);
+    });
+    const cb = el('div', 'row2');
+    const b1 = el('button', null, 'Add cut'); b1.onclick = () => { it.cuts.push({ a: 0.42, b: 0.58 }); onEdit(true); };
+    const b2 = el('button', null, 'Pinhole'); b2.onclick = () => { it.cuts.length = 0; it.cuts.push({ a: 0, b: 0.49 }, { a: 0.51, b: 1 }); onEdit(true); };
+    cb.appendChild(b1); cb.appendChild(b2); box.appendChild(cb);
+
+    box.appendChild(el('div', 'div-l', '3D body'));
+    box.appendChild(angleCtl('Tilt \u00b7 about local Y', (it.tilt || 0) * R2D, v => { it.tilt = v * D2R; onEdit(); }));
+    box.appendChild(angleCtl('Roll \u00b7 about local X', (it.roll || 0) * R2D, v => { it.roll = v * D2R; onEdit(); }));
+    box.appendChild(note('Rotation is the yaw the 2D view already shows. Tilt and roll take the body out of the bench plane and apply in 3D only \u2014 the 2D view keeps drawing the untilted cross-section. Which of the two bites depends on the shape: tilt swings the axis of a revolved solid (dish, cone, lens) and does nothing to a flat plate, while roll tips a plate, trough or prism and does nothing to a revolved solid, which is already symmetric about that axis. Together the three angles aim a body anywhere. Position stays on the bench: a body still sits at z = 0.'));
+    const bw = el('div', 'ctl'), bh = el('div', 'ctl-h');
+    bh.appendChild(el('span', 'ctl-l', 'Body colour'));
+    const bp = el('input', 'ctl-c'); bp.type = 'color'; bp.value = it.color3 || '#6D8FB0';
+    bp.oninput = () => { it.color3 = bp.value; S.dirty3 = true; renderList(); };
+    bh.appendChild(bp); bw.appendChild(bh); box.appendChild(bw);
+    box.appendChild(sel('Sweep', [['revolve', 'Revolve about axis'], ['extrude', 'Extrude (trough)']], it.d3, v => { it.d3 = v; onEdit(true); }));
+    if (it.d3 === 'extrude') box.appendChild(ctl('Depth', 'm', it.depth, 0.02, 6, 0.01, v => { it.depth = v; onEdit(); }));
+    else box.appendChild(ctl('Revolve steps', '', it.revSteps, 6, 96, 2, v => { it.revSteps = v | 0; onEdit(); }));
+  }
+
+  const row = el('div', 'row2');
+  const dup = el('button', null, 'Duplicate'); dup.onclick = duplicateSelected;
+  const del = el('button', 'danger', 'Delete'); del.onclick = deleteSelected;
+  row.appendChild(dup); row.appendChild(del); box.appendChild(row);
+}
+
+function updateRx(o) {
+  const box = $('rxstats'); if (!box) return;
+  box.innerHTML = '';
+  if (!o || o.role !== 'receiver') return;
+  box.appendChild(el('div', 'div-l', 'Received'));
+  const rx = o._rx || { by: {}, n: 0, w: 0, r: [] };
+  const srcs = S.sources.filter(x => x.on);
+  const line = (name, colour, got, sent, weight) => {
+    const r = el('div', 'rx');
+    const dot = el('span', 'dot'); dot.style.background = colour; r.appendChild(dot);
+    r.appendChild(el('span', 'rx-n', name));
+    r.appendChild(el('span', 'rx-c', got + '/' + sent));
+    const pct = sent ? 100 * got / sent : 0;
+    r.appendChild(el('span', 'rx-p', fmt(pct, 1) + '%'));
+    const bar = el('div', 'rx-bar'), fill = el('div', 'rx-fill');
+    fill.style.width = clamp(pct, 0, 100) + '%'; fill.style.background = colour;
+    bar.appendChild(fill); r.appendChild(bar);
+    box.appendChild(r);
+    if (weight != null && Math.abs(weight - got) > 1e-6) {
+      const w = el('div', 'note'); w.textContent = 'weighted by Fresnel: ' + fmt(sent ? 100 * weight / sent : 0, 1) + '%';
+      box.appendChild(w);
+    }
+  };
+  for (const src of srcs) {
+    const e = rx.by[src.id];
+    line(src.name, src.color, e ? e.n : 0, src._emitted || 0, e ? e.w : 0);
+  }
+  if (srcs.length !== 1) line('All beams', '#5BE0A0', rx.n, S.emitted || 0, rx.w);
+  if (rx.r.length) {
+    let sum = 0, mx = 0;
+    for (const h of rx.r) { sum += h.d * h.d; mx = Math.max(mx, h.d); }
+    const rms = Math.sqrt(sum / rx.r.length);
+    box.appendChild(note('Spot about the centre: ' + fmt(rms * 1000, 1) + ' mm rms, ' + fmt(mx * 1000, 1) + ' mm furthest.'));
+  } else if (srcs.length) {
+    box.appendChild(note('Nothing is arriving. Check the aperture, the aim, and the bounce limit.'));
+  }
+}
+
+function updateDerived(o) {
+  const d = $('derived'); if (!d) return;
+  const p = o.params; let t = '';
+  if (o.type === 'halfparabolaY') {
+    const yc = clamp(Math.sqrt(4 * p.f * Math.max(0, p.d)), 0, p.h);
+    t = (p.keep === 'bowl' ? 'Vertex bowl out to \u00b1' + fmt(yc, 3) + ' m; the arms beyond it are dashed guides. '
+                           : 'Outer arms from \u00b1' + fmt(yc, 3) + ' m to \u00b1' + fmt(p.h, 3) + ' m \u2014 a ring once revolved, with the vertex removed. ') +
+        'Focus still at ' + fmt(p.f, 3) + ' m on the axis.';
+  } else if (o.type === 'parabola' || o.type === 'halfparabola') {
+    t = 'Focus on axis at ' + fmt(p.f, 3) + ' m from the vertex. Rays parallel to the axis meet there exactly \u2014 no spherical aberration.';
+  } else if (o.type === 'ellipse' || o.type === 'halfellipse' || o.type === 'halfellipseY') {
+    const a = p.a, b = p.b, big = Math.max(a, b), small = Math.min(a, b);
+    const c = Math.sqrt(Math.max(0, big * big - small * small));
+    t = 'Foci \u00b1' + fmt(c, 3) + ' m on the ' + (a >= b ? 'x' : 'y') + ' axis \u00b7 separation ' + fmt(2 * c, 3) +
+        ' m \u00b7 eccentricity ' + fmt(c / big, 3) + '. Every ray from one focus lands on the other.' +
+        (o.type === 'halfellipse' ? ' The missing half is drawn dashed \u2014 both foci still belong to the half that reflects.'
+         : o.type === 'halfellipseY' ? ' Cut at x = ' + fmt(p.d || 0, 3) + ' m; the discarded arc and the chord are dashed guides. ' +
+             'A focus on the discarded side is still marked \u2014 rays from it reflect off what is left and land on the other one.'
+         : '');
+  } else if (o.type === 'concave' || o.type === 'arc' || o.type === 'circle') {
+    const R = p.R;
+    t = 'Radius of curvature ' + fmt(R, 3) + ' m, paraxial focus at ' + fmt(R / 2, 3) + ' m. Wide apertures show spherical aberration \u2014 the caustic.';
+  } else if (o.type === 'hyperbola') {
+    const c = Math.hypot(p.a, p.b);
+    t = 'Foci \u00b1' + fmt(c, 3) + ' m \u00b7 eccentricity ' + fmt(c / p.a, 3) + ' \u00b7 asymptotes at \u00b1' +
+        fmt(Math.atan2(p.b, p.a) * R2D, 1) + '\u00b0. Only the near branch reflects: light aimed at F2 leaves as if it came from F1. ' +
+        'The far branch and the asymptotes are drawn dashed as guides.';
+  } else if (o.type === 'lens') {
+    const n = o.ior || 1.5, R1 = p.R1, R2 = p.R2, ct = p.ct;
+    const inv = (n - 1) * ((R1 ? 1 / R1 : 0) - (R2 ? 1 / R2 : 0) + (R1 && R2 ? (n - 1) * ct / (n * R1 * R2) : 0));
+    const edge = ct - (R1 ? Math.sign(R1) * (Math.abs(R1) - Math.sqrt(Math.max(0, R1 * R1 - p.h * p.h))) : 0)
+                    + (R2 ? Math.sign(R2) * (Math.abs(R2) - Math.sqrt(Math.max(0, R2 * R2 - p.h * p.h))) : 0);
+    t = 'Lensmaker: f = ' + (Math.abs(inv) < 1e-9 ? '\u221e' : fmt(1 / inv, 3) + ' m') + ' at n = ' + fmt(n, 3) +
+        (inv < 0 ? ' (diverging). ' : '. ') + 'Edge thickness ' + fmt(edge, 3) + ' m' +
+        (edge < 0 ? ' \u2014 the surfaces cross, raise the centre thickness. ' : '. ') +
+        'R = 0 makes a surface flat; opposite signs give a biconvex or biconcave lens, equal signs a meniscus.';
+  } else if (o.type === 'dome') {
+    t = 'Half-ball of radius ' + fmt(p.R, 3) + ' m: flat face toward \u2212x, dome toward +x. ' +
+        'Rays entering the flat face converge near ' + fmt(p.R / (2 * ((o.ior || 1.5) - 1)) - p.R, 3) + ' m past the dome.';
+  } else if (o.type === 'prism') {
+    const n = o.ior || 1.5, A = p.ang * D2R, sa = n * Math.sin(A / 2);
+    t = 'Apex ' + fmt(p.ang, 1) + '\u00b0. ' + (sa <= 1
+        ? 'Minimum deviation ' + fmt((2 * Math.asin(sa) - A) * R2D, 2) + '\u00b0 at n = ' + fmt(n, 3) + '.'
+        : 'At this apex angle and index the beam totally internally reflects instead of passing through.') +
+        ' Set the apex to 90\u00b0 and hit a leg square on for the classic right-angle turn.';
+  } else if (o.type === 'tirlens') {
+    const f = p.f, rout = 2 * Math.sqrt(f * (p.len + f)), n = o.ior || 1.5;
+    t = 'Put a source at the marked point S. The cavity is centred on it, so rays enter unbent; the wall is a parabola focused on it, ' +
+        'so everything past the critical angle (' + fmt(Math.asin(1 / n) * R2D, 1) + '\u00b0) leaves collimated. Exit radius ' + fmt(rout, 3) +
+        ' m. Rays going almost straight back meet the wall too steeply to reflect and simply leak out \u2014 which is why real collimators put a reflector there.';
+  } else if (o.type === 'cone') {
+    const ang = Math.atan2(p.r1 - p.r2, p.len) * R2D;
+    t = 'Wall angle ' + fmt(ang, 2) + '\u00b0 \u00b7 concentration ratio ' + fmt((p.r1 / Math.max(1e-6, p.r2)) ** 2, 2) + '\u00d7 (area, revolved).';
+  }
+  if (o.role === 'lens' && o.type !== 'tirlens') {
+    t += (t ? ' ' : '') + 'Critical angle ' + fmt(Math.asin(1 / Math.max(1.0001, o.ior || 1.5)) * R2D, 1) + '\u00b0.';
+  }
+  if (o._len) {
+    const L = o._len;
+    t += (t ? ' ' : '') + 'Surface: ' + fmt(L.kept, 3) + ' m live' +
+         (L.kept < L.total - 1e-6 ? ' of ' + fmt(L.total, 3) + ' m before trimming and cuts.' : '.');
+  }
+  d.textContent = t;
+}
+
+function updateReadout() {
+  const m = S.measure, out = [];
+  out.push('x ' + fmt(wx(MOUSE.x), 4) + '  y ' + fmt(wy(MOUSE.y), 4) + ' m');
+  if (DRAG && DRAG.fine) out.push('FINE \u00d70.1');
+  out.push('1 m = ' + Math.round(S.view.ppm) + ' px');
+  out.push(S.rayCount + ' rays \u00b7 ' + S.segs.length + ' facets \u00b7 ' + (S.dim === 2 ? S.traceMs.toFixed(1) : S.trace3Ms.toFixed(0)) + ' ms');
+  $('readout').textContent = out.join('   \u2502   ');
+  const md = $('measureOut');
+  if (m.a && m.b) {
+    const dx = m.b.x - m.a.x, dy = m.b.y - m.a.y, d = Math.hypot(dx, dy);
+    md.textContent = 'd = ' + fmt(d, 4) + ' m  (' + fmt(d * 100, 2) + ' cm)   \u2220 ' + fmt(Math.atan2(dy, dx) * R2D, 2) + '\u00b0   \u0394x ' + fmt(dx, 3) + '  \u0394y ' + fmt(dy, 3);
+    md.classList.add('on');
+  } else if (S.mode === 'measure') { md.textContent = 'Click two points. Green ring = snapped to a vertex, focus or ray hit.'; md.classList.add('on'); }
+  else if (S.mode === 'calibrate') { md.textContent = 'Click two points, then type what that span should measure.'; md.classList.add('on'); }
+  else if (S.note) { md.textContent = S.note; md.classList.add('on'); }
+  else { md.textContent = ''; md.classList.remove('on'); }
+}
+
+/* fade length slider is logarithmic: 0.1 m .. 100 m */
+const fadeSliderToLen = v => 0.1 * Math.pow(10, v / 100 * 3);
+const fadeLenToSlider = L => clamp(Math.log10(L / 0.1) / 3 * 100, 0, 100);
+function syncFade() {
+  const L = S.fade.len;
+  $('ckFade').checked = S.fade.on;
+  $('fadeLen').value = fadeLenToSlider(L);
+  $('fadeLenV').textContent = (L < 1 ? L.toFixed(2) : L < 10 ? L.toFixed(1) : Math.round(L)) + ' m';
+  $('fadeLoss').value = Math.round(S.fade.loss * 100);
+  $('fadeLossV').textContent = Math.round(S.fade.loss * 100) + '%';
+}
+
+function setMode(m) {
+  if (m !== 'select') S.note = '';
+  S.mode = m;
+  if (m !== 'measure') { S.measure.a = S.measure.b = S.measure.live = null; }
+  if (m !== 'calibrate') S.calib.a = null;
+  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === m);
+  cv().style.cursor = m === 'select' ? 'default' : 'crosshair';
+  updateReadout();
+}
+function setDim(d) {
+  S.dim = d;
+  $('btn2d').classList.toggle('on', d === 2); $('btn3d').classList.toggle('on', d === 3);
+  $('hint3').style.display = d === 3 ? 'block' : 'none';
+  // only offer the controls that actually do something in this view
+  $('ckSolidWrap').style.display = d === 3 ? 'flex' : 'none';
+  $('ckNormWrap').style.display = d === 3 ? 'none' : 'flex';
+  $('ckGuideWrap').style.display = d === 3 ? 'none' : 'flex';
+  if (d === 3) { S.dirty3 = true; setMode('select'); }
+  else {
+    traceScene();                 // trace3 shares the receiver counters: put the 2D ones back
+    const it = selected(); if (it && it.role === 'receiver') updateRx(it);
+  }
+  renderList(); updateReadout();
+}
+
+/* ============================================================
+   PRESETS
+   ============================================================ */
+const PRESETS = {
+  parabola: () => {
+    const o = makeObject('parabola', 0.7, 0); o.rot = Math.PI; o.params = { f: 0.35, h: 0.8 }; o.name = 'Parabolic collector';
+    const s = makeSource(-1.7, 0); s.type = 'parallel'; s.width = 1.5; s.count = 21;
+    return { objects: [o], sources: [s], note: 'Collimated light in \u2192 one focus out.' };
+  },
+  ellipse: () => {
+    const o = makeObject('ellipse', 0, 0); o.params = { a: 1.2, b: 0.75 }; o.name = 'Elliptical cavity';
+    const c = Math.sqrt(1.2 * 1.2 - 0.75 * 0.75);
+    const s = makeSource(-c, 0); s.type = 'point'; s.count = 60; s.color = '#F2A93B'; s.name = 'Source at F1';
+    return { objects: [o], sources: [s], fade: 5, note: 'Every ray leaving F1 arrives at F2 after one bounce \u2014 later bounces fade out.' };
+  },
+  cone: () => {
+    const o = makeObject('cone', -0.5, 0); o.params = { r1: 0.6, r2: 0.08, len: 1.3 }; o.name = 'Funnel concentrator';
+    const t = makeObject('plane', 0.82, 0); t.rot = Math.PI / 2; t.params = { L: 0.16 }; t.role = 'absorber'; t.name = 'Exit detector';
+    const s = makeSource(-1.9, 0); s.type = 'parallel'; s.width = 1.15; s.count = 25;
+    return { objects: [o, t], sources: [s], note: 'Non-imaging concentrator: rays walk down the taper.' };
+  },
+  pinhole: () => {
+    const o = makeObject('plane', 0, 0); o.rot = Math.PI / 2; o.params = { L: 1.8 }; o.role = 'absorber';
+    o.cuts = [{ a: 0, b: 0.485 }, { a: 0.515, b: 1 }]; o.name = 'Pinhole aperture';
+    const scr = makeObject('plane', 1.1, 0); scr.rot = Math.PI / 2; scr.params = { L: 1.8 }; scr.role = 'absorber'; scr.name = 'Screen';
+    const s1 = makeSource(-1.2, 0.35); s1.type = 'fan'; s1.spread = 60; s1.count = 25; s1.rot = -0.28;
+    const s2 = makeSource(-1.2, -0.35); s2.type = 'fan'; s2.spread = 60; s2.count = 25; s2.rot = 0.28; s2.color = '#F2A93B';
+    return { objects: [o, scr], sources: [s1, s2], note: 'Only the rays through the hole survive \u2014 and the image inverts.' };
+  },
+  retro: () => {
+    const o = makeObject('vshape', 0.9, 0); o.rot = Math.PI; o.params = { L: 1.0, ang: 90 }; o.name = 'Corner reflector';
+    const s = makeSource(-1.6, 0.25); s.rot = 0.18; s.type = 'parallel'; s.width = 0.8; s.count = 13;
+    return { objects: [o], sources: [s], note: '90\u00b0 corner: every ray leaves parallel to how it came in.' };
+  },
+  ball: () => {
+    const o = makeObject('circle', 0, 0); o.params = { R: 0.4 }; o.role = 'lens'; o.ior = 1.5; o.name = 'Ball lens';
+    const s = makeSource(-1.6, 0); s.type = 'parallel'; s.width = 0.62; s.count = 21;
+    return { objects: [o], sources: [s], fade: 8, note: 'A sphere of n = 1.5 focuses about 0.2 m past its back surface \u2014 and the outer rays miss badly. That spread is spherical aberration.' };
+  },
+  prism: () => {
+    const o = makeObject('prism', 0.1, 0.1); o.params = { ang: 90, L: 0.8 }; o.rot = Math.PI / 4; o.ior = 1.5; o.name = 'Right-angle prism';
+    const s = makeSource(-1.2, 0.5); s.type = 'parallel'; s.width = 0.44; s.count = 13;
+    return { objects: [o], sources: [s], fade: 8, note: 'In square, 45\u00b0 on the hypotenuse \u2014 past the 41.8\u00b0 critical angle, so it turns the beam through 90\u00b0 with no coating at all.' };
+  },
+  tir: () => {
+    const o = makeObject('tirlens', 0, 0); o.ior = 1.5; o.name = 'TIR collimator';
+    const s = makeSource(0, 0); s.type = 'point'; s.count = 72; s.color = '#F2A93B'; s.name = 'LED at S';
+    return { objects: [o], sources: [s], fade: 14, note: 'One optic, two mechanisms: the middle refracts through the centre lens, the sides bounce off the parabolic wall by total internal reflection.' };
+  },
+  lensmirror: () => {
+    const l = makeObject('lens', -0.8, 0); l.params = { R1: 0.6, R2: -0.6, h: 0.4, ct: 0.14 }; l.ior = 1.5; l.name = 'Biconvex lens';
+    const m = makeObject('concave', 1.2, 0); m.params = { R: 1.6, ap: 1.0 }; m.rot = Math.PI; m.name = 'Concave mirror';
+    const s = makeSource(-1.42, 0); s.type = 'fan'; s.spread = 52; s.count = 21;
+    return { objects: [l, m], sources: [s], fade: 10, note: 'Source at the lens focus, so the mirror sees a collimated beam and brings it to its own focus. Move the source and watch both change.' };
+  },
+  link: () => {
+    const lens = makeObject('lens', 0.6, 0); lens.params = { R1: 0.7, R2: -0.7, h: 0.45, ct: 0.14 };
+    lens.ior = 1.5; lens.name = 'Collecting lens';
+    const rx = makeObject('receiver', 1.68, 0); rx.params = { L: 0.24 }; rx.rot = Math.PI / 2; rx.name = 'Receiver';
+    const s = makeSource(-1.6, 0); s.type = 'fan'; s.spread = 26; s.count = 41;
+    return {
+      objects: [lens, rx], sources: [s], fade: 16,
+      note: 'Two separate losses: 89% of the beam is wide enough to reach the lens at all, but only 61% lands on the detector \u2014 this lens is fast enough that the outer rays focus short of it. Widen the receiver to 0.5 m and you get almost all of it back.'
+    };
+  },
+  cassegrain: () => {
+    // primary focus (1.2, 0) is also the hyperbola's far focus; near focus at (-0.5, 0)
+    const pri = makeObject('parabola', 0, 0); pri.params = { f: 1.2, h: 0.9 };
+    pri.cuts = [{ a: 0.452, b: 0.548 }]; pri.name = 'Primary (paraboloid)';
+    const sec = makeObject('hyperbola', 0.35, 0); sec.params = { a: 0.65, b: 0.5477, h: 0.19 };
+    sec.name = 'Secondary (hyperboloid)';
+    const s = makeSource(2.6, 0); s.rot = Math.PI; s.type = 'parallel'; s.width = 1.75; s.count = 25;
+    return {
+      objects: [pri, sec], sources: [s], fade: 12,
+      note: 'Cassegrain: the primary aims at its focus, which is also the hyperbola\u2019s far focus, so light lands on the near focus behind the primary. The rays bouncing straight back are the central obstruction.'
+    };
+  },
+  aberration: () => {
+    const o = makeObject('concave', 0.9, 0); o.rot = Math.PI; o.params = { R: 1.6, ap: 1.7 }; o.name = 'Spherical mirror';
+    const s = makeSource(-1.9, 0); s.type = 'parallel'; s.width = 1.65; s.count = 33;
+    return { objects: [o], sources: [s], note: 'Edge rays miss the paraxial focus \u2014 that cusp is the caustic.' };
+  }
+};
+
+function loadPreset(k) {
+  const p = PRESETS[k](); if (!p) return;
+  S.objects = p.objects; S.sources = p.sources; S.sel = null;
+  S.sources.forEach((x, i) => { if (/^Beam \d+$/.test(x.name)) x.name = 'Beam ' + (i + 1); });
+  if (p.fade) { S.fade.len = p.fade; syncFade(); }
+  fitView(); onEdit(true); renderList();
+  S.note = p.note; updateReadout();
+}
+
+function fitView() {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  const grow = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  for (const o of S.objects) { for (const s of segmentsOf(o)) { grow(s.ax, s.ay); grow(s.bx, s.by); } }
+  for (const s of S.sources) grow(s.x, s.y);
+  if (x0 > x1) { x0 = -1; x1 = 1; y0 = -1; y1 = 1; }
+  const w = Math.max(0.2, x1 - x0), h = Math.max(0.2, y1 - y0);
+  S.view.cx = (x0 + x1) / 2; S.view.cy = (y0 + y1) / 2;
+  S.view.ppm = clamp(0.8 * Math.min(W / w, H / h), 4, 4000);
+  S.cam.dist = Math.max(w, h) * 2.6; S.cam.tx = S.view.cx; S.cam.ty = S.view.cy; S.cam.tz = 0;
+}
+
+/* ============================================================
+   SAVE / LOAD
+   ============================================================ */
+function saveScene() {
+  const data = JSON.stringify({
+    v: 1, objects: S.objects.map(cleanCopy), sources: S.sources.map(cleanCopy), view: S.view
+  }, null, 1);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = 'optics-bench.json'; a.click();
+}
+function loadScene(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      S.objects = (d.objects || []).map((o, i) => Object.assign({
+        kind: 'obj', rot: 0, tilt: 0, roll: 0, cuts: [], trim: { a: 0, b: 1 }, role: 'mirror', ior: 1.5, flip: false, depth: 0.8, revSteps: 40,
+        d3: SHAPES[o.type] ? SHAPES[o.type].d3 : 'revolve', name: o.type,
+        color3: BODY_COLORS[i % BODY_COLORS.length]        // benches saved before 3D colours
+      }, o));
+      S.nextColor = S.objects.length;
+      S.sources = (d.sources || []).map(x => Object.assign({
+        kind: 'src', rot: 0, tilt: 0, type: 'parallel', count: 17, spread: 30, width: 0.9,
+        color: '#4ADEDE', on: true, name: 'Beam'
+      }, x));
+      S.nextId = 1 + Math.max(0, ...S.objects.map(o => o.id), ...S.sources.map(s => s.id));
+      if (d.view) S.view = d.view;
+      S.sel = null; onEdit(true); renderList();
+    } catch (e) { alert('That file is not a saved bench.'); }
+  };
+  r.readAsText(file);
+}
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+window.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  const it = selected(), fine = isFine(e);
+  const step = fine ? 0.0001 : e.shiftKey ? 0.01 : 0.001;      // 0.1 mm / 1 mm / 10 mm
+  const rot = (fine ? 0.05 : e.shiftKey ? 5 : 0.5) * D2R;      // 0.05 deg / 0.5 deg / 5 deg
+  switch (e.key) {
+    case 'Delete': case 'Backspace': deleteSelected(); e.preventDefault(); break;
+    case 'ArrowLeft': if (it) { it.x -= step; onEdit(true); e.preventDefault(); } break;
+    case 'ArrowRight': if (it) { it.x += step; onEdit(true); e.preventDefault(); } break;
+    case 'ArrowUp': if (it) { it.y += step; onEdit(true); e.preventDefault(); } break;
+    case 'ArrowDown': if (it) { it.y -= step; onEdit(true); e.preventDefault(); } break;
+    case 'q': case 'Q': if (it) { it.rot += rot; onEdit(true); } break;
+    case 'e': case 'E': if (it) { it.rot -= rot; onEdit(true); } break;
+    case 'd': case 'D': duplicateSelected(); break;
+    case 'v': case 'V': setMode('select'); break;
+    case 'm': case 'M': setMode('measure'); break;
+    case 'g': case 'G': S.show.grid = !S.show.grid; $('ckGrid').checked = S.show.grid; break;
+    case 'f': case 'F': S.show.foci = !S.show.foci; $('ckFoci').checked = S.show.foci; break;
+    case 'n': case 'N': S.show.normals = !S.show.normals; $('ckNorm').checked = S.show.normals; break;
+    case 'a': case 'A': S.fade.on = !S.fade.on; syncFade(); break;
+    case 'u': case 'U': S.show.guides = !S.show.guides; $('ckGuide').checked = S.show.guides; break;
+    case 'r': case 'R': S.fresnel = !S.fresnel; $('ckFres').checked = S.fresnel; onEdit(); break;
+    case '2': setDim(2); break;
+    case '3': setDim(3); break;
+    case 'Escape': S.sel = null; setMode('select'); buildInspector(); renderList(); break;
+  }
+});
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+/* the 3D frame is expensive, so only redraw when something that shows has moved */
+function sig3() {
+  const c = S.cam, sh = S.show, f = S.fade;
+  return c.yaw + ',' + c.pitch + ',' + c.dist + ',' + c.tx + ',' + c.ty + ',' + c.tz +
+    '|' + (S.sel ? S.sel.kind + S.sel.id : '-') + '|' + S.solid3 +
+    '|' + sh.grid + sh.foci + sh.labels + '|' + f.on + ',' + f.len + ',' + f.loss +
+    '|' + W + 'x' + H + '|' + (DRAG ? 1 : 0);
+}
+let SIG3 = '';
+
+function loop() {
+  if (S.dim === 2) render2();
+  else {
+    let redraw = false;
+    if (S.dirty3) {
+      S.mesh3 = null; buildMesh3(); trace3(); S.dirty3 = false;
+      updateReadout(); renderList();
+      const it = selected(); if (it && it.role === 'receiver') updateRx(it);
+      redraw = true;
+    }
+    const s = sig3();
+    if (s !== SIG3) { SIG3 = s; redraw = true; }
+    if (redraw) render3();
+  }
+  requestAnimationFrame(loop);
+}
+
+function init() {
+  resize();
+  const c = cv();
+  c.addEventListener('pointerdown', onDown);
+  c.addEventListener('pointermove', onMove);
+  c.addEventListener('pointerup', onUp);
+  c.addEventListener('pointercancel', onUp);
+  c.addEventListener('wheel', onWheel, { passive: false });
+  c.addEventListener('contextmenu', e => e.preventDefault());
+  new ResizeObserver(() => { resize(); }).observe(c.parentElement);
+
+  buildLibrary();
+  $('btn2d').onclick = () => setDim(2);
+  $('btn3d').onclick = () => setDim(3);
+  for (const b of document.querySelectorAll('[data-mode]')) b.onclick = () => setMode(b.dataset.mode);
+  $('addBeam').onclick = addSource;
+  $('fitBtn').onclick = () => { fitView(); updateReadout(); };
+  $('clearBtn').onclick = () => { S.objects = []; S.sources = []; S.sel = null; onEdit(true); renderList(); };
+  $('saveBtn').onclick = saveScene;
+  $('openBtn').onclick = () => $('fileIn').click();
+  $('fileIn').onchange = e => { if (e.target.files[0]) loadScene(e.target.files[0]); e.target.value = ''; };
+  $('presetSel').onchange = e => { if (e.target.value) { loadPreset(e.target.value); e.target.value = ''; } };
+  $('bounces').oninput = e => { S.maxBounces = +e.target.value; $('bouncesV').textContent = e.target.value; onEdit(); };
+  $('ckGrid').onchange = e => S.show.grid = e.target.checked;
+  $('ckFade').onchange = e => { S.fade.on = e.target.checked; };
+  $('fadeLen').oninput = e => { S.fade.len = fadeSliderToLen(+e.target.value); syncFade(); };
+  $('fadeLoss').oninput = e => { S.fade.loss = (+e.target.value) / 100; syncFade(); };
+  $('ckFoci').onchange = e => S.show.foci = e.target.checked;
+  $('ckNorm').onchange = e => S.show.normals = e.target.checked;
+  $('ckGuide').onchange = e => S.show.guides = e.target.checked;
+  $('ckFres').onchange = e => { S.fresnel = e.target.checked; onEdit(); };
+  $('ckSolid').onchange = e => S.solid3 = e.target.checked;
+  $('helpBtn').onclick = () => $('help').classList.toggle('open');
+  $('helpClose').onclick = () => $('help').classList.remove('open');
+
+  syncFade();
+  loadPreset('parabola');
+  setMode('select'); setDim(2);
+  buildInspector(); renderList(); updateReadout();
+  requestAnimationFrame(loop);
+}
+window.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>

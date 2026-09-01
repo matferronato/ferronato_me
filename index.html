@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benches — interactive instruments for RF, optics and fields</title>
+<meta name="description" content="Browser-based benches for signal processing, RF, electromagnetics, optics and free-space optical links.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --panel:#E9ECE8;
+  --surface:#F8F9F6;
+  --ink:#151B1E;
+  --muted:#636C71;
+  --rule:#CBD1CC;
+  --signal:#0E6E72;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--panel);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:16px;
+  line-height:1.6;
+}
+.wrap{max-width:60rem;margin:0 auto;padding:0 1.5rem}
+
+header{padding:4.5rem 0 2.5rem}
+.trace{display:block;width:100%;max-width:26rem;height:44px;margin-bottom:2rem}
+.trace path{
+  fill:none;stroke:var(--signal);stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:900;stroke-dashoffset:900;
+  animation:draw 1.6s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes draw{to{stroke-dashoffset:0}}
+h1{
+  font-size:clamp(2rem,5vw,2.9rem);
+  font-weight:600;letter-spacing:-.022em;line-height:1.1;
+  margin:0 0 .9rem;
+}
+.lede{
+  max-width:34rem;margin:0;
+  font-size:1.0625rem;color:var(--muted);
+}
+
+.rack{border-top:1px solid var(--rule);margin-bottom:4rem}
+.bench{
+  display:grid;
+  grid-template-columns:3.25rem 1fr auto;
+  align-items:center;
+  gap:1.25rem;
+  padding:1.35rem .75rem;
+  border-bottom:1px solid var(--rule);
+  text-decoration:none;color:inherit;
+  transition:background .12s ease;
+}
+.bench:hover,.bench:focus-visible{background:var(--surface)}
+.bench:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.glyph{width:3.25rem;height:2.25rem;color:var(--signal)}
+.glyph svg{width:100%;height:100%;display:block}
+.glyph svg *{fill:none;stroke:currentColor;stroke-width:1.35;
+  stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.name{font-size:1.0625rem;font-weight:500;letter-spacing:-.01em;margin:0}
+.what{font-size:.9375rem;color:var(--muted);margin:.15rem 0 0}
+.band{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.8125rem;color:var(--muted);
+  border:1px solid var(--rule);border-radius:2px;
+  padding:.15rem .5rem;white-space:nowrap;
+}
+
+footer{
+  padding:0 0 4rem;font-size:.875rem;color:var(--muted);
+}
+footer p{margin:0;max-width:34rem}
+
+@media (max-width:34rem){
+  header{padding:3rem 0 2rem}
+  .bench{grid-template-columns:2.5rem 1fr;gap:1rem;padding:1.15rem .25rem}
+  .glyph{width:2.5rem;height:1.9rem}
+  .band{grid-column:2;justify-self:start;margin-top:.4rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .trace path{animation:none;stroke-dashoffset:0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <svg class="trace" viewBox="0 0 400 44" aria-hidden="true" preserveAspectRatio="none">
+    <path d="M0 22 L48 22 L60 22 Q72 22 78 10 T96 22 T114 34 T132 22 L150 22
+             Q166 22 174 6 T192 22 T210 38 T228 22 L252 22 Q264 22 270 14
+             T286 22 T302 30 T318 22 L400 22"/>
+  </svg>
+  <h1>Benches</h1>
+  <p class="lede">
+    Interactive instruments for signal processing, RF, electromagnetics and
+    optics. Each one runs entirely in the browser — nothing to install.
+  </p>
+</header>
+
+<nav class="rack">
+
+  <a class="bench" href="fft/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><path d="M4 30 L4 8 L24 8 Q30 8 32 14 L36 26 L40 20 L44 28 L48 24"/><path d="M4 30 L48 30" opacity=".3"/></svg>
+    </span>
+    <span>
+      <span class="name">Filter bench</span>
+      <p class="what">FIR against IIR, DFT against FFT, ideal against real</p>
+    </span>
+    <span class="band">DSP</span>
+  </a>
+
+  <a class="bench" href="rf-filters/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><path d="M2 18 L10 18"/><rect x="10" y="11" width="12" height="14" rx="1"/><path d="M22 18 L28 18"/><rect x="28" y="11" width="12" height="14" rx="1"/><path d="M40 18 L50 18"/></svg>
+    </span>
+    <span>
+      <span class="name">Signal chain studio</span>
+      <p class="what">Filter and chain design end to end</p>
+    </span>
+    <span class="band">RF</span>
+  </a>
+
+  <a class="bench" href="smith-charts/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><circle cx="26" cy="18" r="14"/><path d="M12 18 L40 18" opacity=".4"/><path d="M33 4 A16 16 0 0 1 33 32" opacity=".7"/><path d="M26 18 A9 9 0 0 0 35 9" opacity=".7"/></svg>
+    </span>
+    <span>
+      <span class="name">Smith bench</span>
+      <p class="what">Impedance, transmission lines and matching</p>
+    </span>
+    <span class="band">RF</span>
+  </a>
+
+  <a class="bench" href="em-fields/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><circle cx="20" cy="18" r="2.5"/><path d="M27 18 A7 7 0 1 0 20 11" opacity=".85"/><path d="M34 18 A13 13 0 1 0 21 5" opacity=".6"/><path d="M41 18 A19 19 0 1 0 22 -1" opacity=".35"/></svg>
+    </span>
+    <span>
+      <span class="name">Retarded field bench</span>
+      <p class="what">Moving charges and the fields they drag behind them</p>
+    </span>
+    <span class="band">EM</span>
+  </a>
+
+  <a class="bench" href="optics/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><path d="M40 4 Q30 18 40 32"/><path d="M4 9 L37 15 L6 26"/><path d="M4 22 L37 20" opacity=".45"/></svg>
+    </span>
+    <span>
+      <span class="name">Optics bench</span>
+      <p class="what">Reflective surfaces and ray tracing</p>
+    </span>
+    <span class="band">OPT</span>
+  </a>
+
+  <a class="bench" href="turbulence/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36"><path d="M2 18 L14 18"/><path d="M14 18 Q20 9 26 18 T38 18 T50 18"/><path d="M17 30 Q23 24 29 30" opacity=".45"/><path d="M17 7 Q23 12 29 7" opacity=".45"/></svg>
+    </span>
+    <span>
+      <span class="name">Turbulence bench</span>
+      <p class="what">Atmospheric scintillation over a 1 km link</p>
+    </span>
+    <span class="band">FSO</span>
+  </a>
+
+</nav>
+
+<footer>
+  <p>Built by Matheus Ferronato. Everything here is a working instrument
+     rather than an article — change the inputs and watch what moves.</p>
+</footer>
+
+</div>
+</body>
+</html>
