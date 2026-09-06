@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Signal Integrity Studio · High-Speed PCB Lab</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand-block">
+      <div class="brand-symbol" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div><div class="brand-name">SI Studio</div><div class="brand-sub">SIGNAL INTEGRITY LAB</div></div>
+    </div>
+
+    <div class="side-section-label">LABS</div>
+    <nav class="lab-nav" id="labNav" aria-label="Signal integrity labs">
+      <button class="active" data-target="tl"><i>01</i><span>Transmission line<small>Propagation & reflections</small></span></button>
+      <button data-target="match"><i>02</i><span>Impedance matching<small>Source, load & bounce</small></span></button>
+      <button data-target="diff"><i>03</i><span>Differential pair<small>Skew & common mode</small></span></button>
+      <button data-target="xtalk"><i>04</i><span>Crosstalk<small>Field sharing & spacing</small></span></button>
+      <button data-target="vias"><i>05</i><span>Via transition<small>Return path & fencing</small></span></button>
+      <button data-target="stackup"><i>06</i><span>Stackup / Z₀<small>Geometry & impedance</small></span></button>
+      <button data-target="guide"><i>07</i><span>Design review<small>Current channel audit</small></span></button>
+    </nav>
+
+    <div class="side-section-label channel-label">LIVE CHANNEL</div>
+    <div class="global-telemetry" id="globalTelemetry"></div>
+
+    <div class="sidebar-foot">
+      <span class="engine-led"></span><span id="serverStatus">local engine</span>
+      <small>educational SI models</small>
+    </div>
+  </aside>
+
+  <div class="workspace-shell">
+    <header class="workspace-bar">
+      <div class="crumb"><span>HIGH-SPEED PCB</span><b id="activeLabTitle">Transmission line</b></div>
+      <div class="bar-center">
+        <span class="state-chip"><i class="dot cyan"></i> interactive</span>
+        <span class="state-chip"><i class="dot amber"></i> shared state</span>
+      </div>
+      <div class="header-actions">
+        <button id="themeBtn" class="tool-btn">Light mode</button>
+        <button id="pauseBtn" class="tool-btn" title="Pause animation"><span class="pause-icon">Ⅱ</span> Pause</button>
+        <button id="resetAll" class="tool-btn" title="Reset all parameters">↺ Reset</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section id="tl" class="lab-section active">
+        <div class="lab-heading">
+          <div class="lab-index">01</div>
+          <div><span class="micro-label">PROPAGATION</span><h1>Transmission line & reflections</h1><p>Explore a signal as it propagates, reflects, and settles at the receiver.</p></div>
+          <div class="lab-principle"><span>CORE IDEA</span><b>Interconnect delay matters relative to edge time, not clock frequency alone.</b></div>
+        </div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument">
+            <div class="instrument-top"><div><span class="instrument-kicker">SPATIAL VIEW</span><strong>Voltage along physical channel</strong></div><div class="legend"><span><i class="cyan"></i>forward →</span><span><i class="red"></i>← reflected</span><span><i class="lime"></i>total</span></div></div>
+            <div class="signal-generator" aria-label="Signal generator">
+ <label class="wave-select">Excitation<select data-bind="waveform"><option value="step">Step</option><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="random">Random NRZ</option></select></label>
+ <label class="control-row"><span class="frequency-label">Frequency</span><output data-out="freqMHz"></output><input aria-label="Signal frequency in MHz" data-bind="freqMHz" type="range" min="50" max="2000" step="50"></label>
+ <label class="control-row"><span>Amplitude · V peak</span><output data-out="ampV"></output><input aria-label="Signal amplitude" data-bind="ampV" type="range" min="0.2" max="1.8" step="0.05"></label>
+ <p>Step: 0 → A; other signals: ±A. Random rate is in Mbit/s. Time and voltage scales stay fixed when excitation changes.</p></div><div class="time-controls"><label>Time <output data-time></output><input data-scrub type="range" min="0" max="999" step="1" value="0" aria-label="Simulation time"></label><button data-replay class="tool-btn">Replay</button><label class="scale-choice">Span<select data-bind="windowNs"><option value="4">4 ns</option><option value="12">12 ns</option><option value="24">24 ns</option><option value="80">80 ns</option></select></label><label class="scale-choice">Scale<select data-bind="voltsDiv"><option value="0.1">0.1 V/div</option><option value="0.25">0.25 V/div</option><option value="0.5">0.5 V/div</option><option value="1">1 V/div</option><option value="2">2 V/div</option></select></label></div><label class="control-row probe-control"><span>Voltage probe · position along line</span><output data-out="probePct"></output><input data-bind="probePct" type="range" min="0" max="100" step="1"></label><div id="voltageSum" class="voltage-sum" aria-live="off"></div><div class="change-readout" id="tlChange">Adjust a parameter. The affected geometry or waveform will respond here.</div>
+            <div class="viewport"><canvas id="tlCanvas" width="1200" height="600"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div>
+            <div class="instrument-status"><span>DOMAIN <b>SPACE + TIME</b></span><span>MODEL <b>LOSSLESS TL</b></span><span class="live-status">● RUNNING</span></div>
+          </div>
+          <aside class="instrument control-dock">
+            <div class="dock-head"><div><span class="instrument-kicker">EXPERIMENT</span><strong>Channel parameters</strong></div><span class="dock-badge">LIVE</span></div>
+            <label class="control-row"><span>Channel length <small>physical trace length + flight time</small></span><output data-out="lineMm"></output><input data-bind="lineMm" type="range" min="20" max="500" step="5"></label>
+            <label class="control-row"><span>Load resistance <small>reflection polarity + magnitude</small></span><output data-out="loadR"></output><input data-bind="loadR" type="range" min="0" max="200" step="1"></label>
+            <label class="control-row"><span>Edge time <small>spatial width of transition</small></span><output data-out="edgePs"></output><input data-bind="edgePs" type="range" min="50" max="2000" step="10"></label>
+            
+            <label class="control-row"><span>Propagation velocity <small>wave travel speed</small></span><output data-out="vpMmNs"></output><input data-bind="vpMmNs" type="range" min="130" max="200" step="1"></label>
+            <div class="metrics" id="tlMetrics"></div>
+            <div class="formula-block"><span>LOAD REFLECTION</span><code>ΓL = (ZL − Z₀) / (ZL + Z₀)</code></div>
+          </aside>
+        </div>
+        <div class="analysis-row two-col">
+          <article class="instrument plot-card"><div class="instrument-top"><div><span class="instrument-kicker">TIME DOMAIN</span><strong>Receiver voltage</strong></div><span class="scope-tag">CH1 · VLOAD</span></div><canvas id="tlPlot" width="1200" height="400"></canvas></article>
+          <article class="instrument insight" id="tlInsight"></article>
+        </div>
+      </section>
+
+      <section id="match" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">02</div><div><span class="micro-label">TERMINATION</span><h1>50 Ω matching & bounce behavior</h1><p>Matching is about controlling what happens when a traveling wave reaches an impedance discontinuity. The schematic and lattice share the same parameters.</p></div><div class="lab-principle"><span>CORE IDEA</span><b>A 50 Ω trace is not “a 50 Ω resistor.” It is a transmission-line boundary condition.</b></div></div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument"><div class="instrument-top"><div><span class="instrument-kicker">IMPULSE PATHS</span><strong>Termination network + reflection coefficients</strong></div><span class="scope-tag" id="matchCaption"></span></div><div class="signal-generator" aria-label="Signal generator">
+ <label class="wave-select">Excitation<select data-bind="waveform"><option value="step">Step</option><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="random">Random NRZ</option></select></label>
+ <label class="control-row"><span class="frequency-label">Frequency</span><output data-out="freqMHz"></output><input aria-label="Signal frequency in MHz" data-bind="freqMHz" type="range" min="50" max="2000" step="50"></label>
+ <label class="control-row"><span>Amplitude · V peak</span><output data-out="ampV"></output><input aria-label="Signal amplitude" data-bind="ampV" type="range" min="0.2" max="1.8" step="0.05"></label>
+ <p>Step: 0 → A; other signals: ±A. Random rate is in Mbit/s. Time and voltage scales stay fixed when excitation changes.</p></div><div class="time-controls"><label>Time <output data-time></output><input data-scrub type="range" min="0" max="999" step="1" value="0" aria-label="Simulation time"></label><button data-replay class="tool-btn">Replay</button><label class="scale-choice">Span<select data-bind="windowNs"><option value="4">4 ns</option><option value="12">12 ns</option><option value="24">24 ns</option><option value="80">80 ns</option></select></label><label class="scale-choice">Scale<select data-bind="voltsDiv"><option value="0.1">0.1 V/div</option><option value="0.25">0.25 V/div</option><option value="0.5">0.5 V/div</option><option value="1">1 V/div</option><option value="2">2 V/div</option></select></label></div><div class="change-readout" id="matchChange">Labels show path gain (V/Vs). Path brightness follows the selected signal; the plot shows total load voltage.</div><div class="viewport"><canvas class="schematic-canvas" id="matchCanvas" width="1200" height="640"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div><div class="instrument-status"><span>TIME <b>↓ DOWN · FIRST 8 FLIGHTS</b></span><span>CYAN <b>POSITIVE</b></span><span>RED <b>NEGATIVE</b></span></div></div>
+          <aside class="instrument control-dock"><div class="dock-head"><div><span class="instrument-kicker">TERMINATION</span><strong>Boundary conditions</strong></div><span class="dock-badge">Z₀ LINKED</span></div>
+            <label class="control-row"><span>Driver output R <small>source reflection + launch</small></span><output data-out="sourceR"></output><input data-bind="sourceR" type="range" min="0" max="100" step="1"></label>
+            <label class="control-row"><span>Termination R <small>series or parallel element</small></span><output data-out="termR"></output><input data-bind="termR" type="range" min="0" max="100" step="1"></label>
+            <label class="control-row"><span>Load R <small>receiver mismatch</small></span><output data-out="loadR"></output><input data-bind="loadR" type="range" min="5" max="200" step="1"></label>
+            <div class="control-group-label">TOPOLOGY</div><div class="segmented" id="termMode"><button data-mode="none">None</button><button class="active" data-mode="series">Series</button><button data-mode="parallel">Parallel</button></div><div class="metrics" id="matchMetrics"></div>
+          </aside>
+        </div>
+        <div class="analysis-row"><article class="instrument plot-card wide"><div class="instrument-top"><div><span class="instrument-kicker">SETTLING</span><strong>Load voltage after repeated reflections</strong></div><span class="scope-tag">SOURCE + LOAD</span></div><canvas id="matchPlot" width="1500" height="400"></canvas></article></div>
+      </section>
+
+      <section id="diff" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">03</div><div><span class="micro-label">DIFFERENTIAL</span><h1>Differential signals & skew</h1><p>The pair is useful because equal and opposite fields cancel. Spacing changes field sharing; skew breaks simultaneity and converts differential energy into common mode.</p></div><div class="lab-principle"><span>CORE IDEA</span><b>Length matching matters only relative to the signal edge and receiver timing budget.</b></div></div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument"><div class="instrument-top"><div><span class="instrument-kicker">FIELD + TIMING</span><strong>Complementary traveling signals</strong></div><div class="legend"><span><i class="cyan"></i>V+</span><span><i class="purple"></i>V−</span><span><i class="amber"></i>common mode</span></div></div><div class="signal-generator" aria-label="Signal generator">
+ <label class="wave-select">Excitation<select data-bind="waveform"><option value="step">Step</option><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="random">Random NRZ</option></select></label>
+ <label class="control-row"><span class="frequency-label">Frequency</span><output data-out="freqMHz"></output><input aria-label="Signal frequency in MHz" data-bind="freqMHz" type="range" min="50" max="2000" step="50"></label>
+ <label class="control-row"><span>Differential Vpp</span><output data-out="diffVpp"></output><input aria-label="Signal amplitude" data-bind="diffVpp" type="range" min="0.2" max="1.8" step="0.05"></label>
+ <p>Differential Vpp sets the full bipolar swing; step excursion is Vpp/2. Shape and rate are shared.</p></div><div class="time-controls"><label>Time <output data-time></output><input data-scrub type="range" min="0" max="999" step="1" value="0" aria-label="Simulation time"></label><button data-replay class="tool-btn">Replay</button><label class="scale-choice">Span<select data-bind="windowNs"><option value="4">4 ns</option><option value="12">12 ns</option><option value="24">24 ns</option><option value="80">80 ns</option></select></label><label class="scale-choice">Scale<select data-bind="voltsDiv"><option value="0.1">0.1 V/div</option><option value="0.25">0.25 V/div</option><option value="0.5">0.5 V/div</option><option value="1">1 V/div</option><option value="2">2 V/div</option></select></label></div><div class="change-readout" id="diffChange">Move spacing or mismatch. Geometry and edge alignment change together.</div><div class="viewport"><canvas id="diffCanvas" width="1200" height="600"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div><div class="instrument-status"><span>SAMPLE <b>SAME INSTANT</b></span><span>PAIR <b>COUPLED</b></span><span class="live-status">● RUNNING</span></div></div>
+          <aside class="instrument control-dock"><div class="dock-head"><div><span class="instrument-kicker">PAIR GEOMETRY</span><strong>Symmetry controls</strong></div><span class="dock-badge">EDGE LINKED</span></div>
+            <label class="control-row"><span>Pair spacing <small>trace separation + field overlap</small></span><output data-out="diffSpacing"></output><input data-bind="diffSpacing" type="range" min="0.08" max="0.8" step="0.01"></label>
+            <label class="control-row"><span>Length mismatch <small>arrival-time skew</small></span><output data-out="skewMm"></output><input data-bind="skewMm" type="range" min="0" max="20" step="0.1"></label>
+            
+            <label class="control-row"><span>Edge time <small>transition width</small></span><output data-out="edgePs"></output><input data-bind="edgePs" type="range" min="50" max="2000" step="10"></label><div class="metrics" id="diffMetrics"></div>
+          </aside>
+        </div>
+        <div class="analysis-row two-col equal"><article class="instrument plot-card"><div class="instrument-top"><div><span class="instrument-kicker">DIFFERENTIAL DOMAIN</span><strong>V+, V− and Vdiff</strong></div><span class="scope-tag">3 TRACE</span></div><canvas id="diffPlot" width="1100" height="400"></canvas></article><article class="instrument plot-card"><div class="instrument-top"><div><span class="instrument-kicker">MODE CONVERSION</span><strong>Common-mode voltage</strong></div><span class="scope-tag">VCM</span></div><canvas id="cmPlot" width="1100" height="400"></canvas></article></div>
+      </section>
+
+      <section id="xtalk" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">04</div><div><span class="micro-label">COUPLING</span><h1>Crosstalk & coupling</h1><p>The aggressor does not “send noise through air.” Its changing electric and magnetic fields share geometry with the victim. Reference-plane distance and parallelism control that overlap.</p></div><div class="lab-principle"><span>CORE IDEA</span><b>Spacing in absolute millimeters is less useful than spacing relative to plane height.</b></div></div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument"><div class="instrument-top"><div><span class="instrument-kicker">COUPLED REGION</span><strong>Aggressor / victim field interaction</strong></div><div class="legend"><span><i class="cyan"></i>aggressor</span><span><i class="amber"></i>victim</span></div></div><div class="signal-generator" aria-label="Signal generator">
+ <label class="wave-select">Excitation<select data-bind="waveform"><option value="step">Step</option><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="random">Random NRZ</option></select></label>
+ <label class="control-row"><span class="frequency-label">Frequency</span><output data-out="freqMHz"></output><input aria-label="Signal frequency in MHz" data-bind="freqMHz" type="range" min="50" max="2000" step="50"></label>
+ <label class="control-row"><span>Amplitude · V peak</span><output data-out="ampV"></output><input aria-label="Signal amplitude" data-bind="ampV" type="range" min="0.2" max="1.8" step="0.05"></label>
+ <p>Step: 0 → A; other signals: ±A. Random rate is in Mbit/s. Time and voltage scales stay fixed when excitation changes.</p></div><div class="time-controls"><label>Time <output data-time></output><input data-scrub type="range" min="0" max="999" step="1" value="0" aria-label="Simulation time"></label><button data-replay class="tool-btn">Replay</button><label class="scale-choice">Span<select data-bind="windowNs"><option value="4">4 ns</option><option value="12">12 ns</option><option value="24">24 ns</option><option value="80">80 ns</option></select></label><label class="scale-choice">Scale<select data-bind="voltsDiv"><option value="0.1">0.1 V/div</option><option value="0.25">0.25 V/div</option><option value="0.5">0.5 V/div</option><option value="1">1 V/div</option><option value="2">2 V/div</option></select></label></div><div class="change-readout" id="xtalkChange">Change spacing, plane height, or parallel length. The physical field geometry redraws here.</div><div class="viewport"><canvas id="xtalkCanvas" width="1200" height="600"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div><div class="instrument-status"><span>COUPLING <b>EDGE-DRIVEN</b></span><span>REFERENCE <b>PLANE INCLUDED</b></span><span class="live-status">● RUNNING</span></div></div>
+          <aside class="instrument control-dock"><div class="dock-head"><div><span class="instrument-kicker">GEOMETRY</span><strong>Coupling controls</strong></div><span class="dock-badge">FIELD VIEW</span></div>
+            <label class="control-row"><span>Trace spacing <small>victim position</small></span><output data-out="xtalkSpacing"></output><input data-bind="xtalkSpacing" type="range" min="0.08" max="1.5" step="0.01"></label>
+            <label class="control-row"><span>Plane height H <small>field confinement</small></span><output data-out="heightMm"></output><input data-bind="heightMm" type="range" min="0.05" max="0.5" step="0.005"></label>
+            <label class="control-row"><span>Parallel length <small>coupled-section length</small></span><output data-out="parallelMm"></output><input data-bind="parallelMm" type="range" min="5" max="200" step="1"></label>
+            <label class="control-row"><span>Edge time <small>dV/dt + field pulse width</small></span><output data-out="edgePs"></output><input data-bind="edgePs" type="range" min="50" max="2000" step="10"></label>
+            <div class="metrics" id="xtalkMetrics"></div>
+          </aside>
+        </div>
+        <div class="analysis-row two-col"><article class="instrument plot-card"><div class="instrument-top"><div><span class="instrument-kicker">TIME DOMAIN</span><strong>Induced victim transient</strong></div><span class="scope-tag">NEXT + FEXT</span></div><canvas id="xtalkPlot" width="1200" height="400"></canvas></article><article class="instrument insight" id="xtalkInsight"></article></div>
+      </section>
+
+      <section id="vias" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">05</div><div><span class="micro-label">RETURN PATH</span><h1>Via transition & field containment</h1><p>A signal via is only half of a transition. The return current also needs a low-inductance path between reference structures. Remove it and the loop area expands.</p></div><div class="lab-principle"><span>CORE IDEA</span><b>Every signal current has a return current. Route both.</b></div></div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument"><div class="instrument-top"><div><span class="instrument-kicker">LAYER TRANSITION</span><strong>Signal current + return-current path</strong></div><div class="legend"><span><i class="amber"></i>signal</span><span><i class="cyan"></i>return</span><span><i class="red"></i>detour/leakage</span></div></div><div class="change-readout" id="viasChange">Move pitch or distance. The fence geometry and return-current loop change immediately.</div><div class="viewport"><canvas id="viaCanvas" width="1200" height="620"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div><div class="instrument-status"><span>CROSS SECTION <b>L2 → L5</b></span><span>FIELD <b>WAVELENGTH CUE</b></span><span class="live-status">● RUNNING</span></div></div>
+          <aside class="instrument control-dock"><div class="dock-head"><div><span class="instrument-kicker">STITCHING</span><strong>Return-path controls</strong></div><span class="dock-badge">LAYER CHANGE</span></div>
+            <label class="control-row"><span>Fence pitch <small>via density</small></span><output data-out="viaPitch"></output><input data-bind="viaPitch" type="range" min="0.5" max="15" step="0.1"></label>
+            <label class="control-row"><span>Fence distance <small>return-via proximity</small></span><output data-out="viaDist"></output><input data-bind="viaDist" type="range" min="0.3" max="6" step="0.1"></label>
+            <label class="control-row"><span>Equivalent frequency <small>field wavelength</small></span><output data-out="viaFreqGHz"></output><input data-bind="viaFreqGHz" type="range" min="0.5" max="20" step="0.1"></label>
+            <label class="control-row"><span>Plane discontinuity <small>reference opening</small></span><output data-out="planeGap"></output><input data-bind="planeGap" type="range" min="0" max="1" step="0.01"></label>
+            <div class="control-group-label">RETURN STRUCTURE</div><div class="segmented two" id="fenceMode"><button class="active" data-mode="on">Stitching present</button><button data-mode="off">No stitching</button></div><div class="metrics" id="viaMetrics"></div>
+          </aside>
+        </div>
+        <div class="analysis-row"><article class="instrument plot-card wide"><div class="instrument-top"><div><span class="instrument-kicker">PARAMETRIC SWEEP</span><strong>Field containment vs fence pitch</strong></div><span class="scope-tag">CURRENT FREQ</span></div><canvas id="viaPlot" width="1500" height="400"></canvas></article></div>
+      </section>
+
+      <section id="stackup" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">06</div><div><span class="micro-label">ELECTROMAGNETIC GEOMETRY</span><h1>Stackup geometry drives Z₀</h1><p>Characteristic impedance emerges from field geometry. Width, plane spacing, copper thickness, and dielectric constant all redistribute electric and magnetic energy.</p></div><div class="lab-principle"><span>CORE IDEA</span><b>Controlled impedance is a geometry problem before it is a routing rule.</b></div></div>
+        <div class="experiment-grid">
+          <div class="instrument stage-instrument"><div class="instrument-top"><div><span class="instrument-kicker">CROSS SECTION</span><strong>Microstrip geometry + electric field</strong></div><span class="z0-badge" id="z0Badge"></span></div><div class="change-readout" id="stackupChange">Change W, H, T, or εr. Copper, plane position, and field distribution redraw continuously.</div><div class="viewport"><canvas id="stackCanvas" width="1200" height="600"></canvas><div class="viewport-corners"><i></i><i></i><i></i><i></i></div></div><div class="instrument-status"><span>MODEL <b>MICROSTRIP</b></span><span>OUTPUT <b>Z₀ + εeff + vp</b></span><span class="live-status">● LINKED</span></div></div>
+          <aside class="instrument control-dock"><div class="dock-head"><div><span class="instrument-kicker">STACKUP</span><strong>Geometry controls</strong></div><span class="dock-badge">Z₀ GLOBAL</span></div>
+            <label class="control-row"><span>Trace width W <small>surface conductor width</small></span><output data-out="widthMm"></output><input data-bind="widthMm" type="range" min="0.05" max="0.5" step="0.005"></label>
+            <label class="control-row"><span>Plane height H <small>dielectric thickness</small></span><output data-out="heightMm"></output><input data-bind="heightMm" type="range" min="0.05" max="0.5" step="0.005"></label>
+            <label class="control-row"><span>Copper thickness T <small>conductor cross section</small></span><output data-out="copperUm"></output><input data-bind="copperUm" type="range" min="9" max="70" step="1"></label>
+            <label class="control-row"><span>Dielectric εr <small>field concentration + velocity</small></span><output data-out="er"></output><input data-bind="er" type="range" min="2" max="6" step="0.05"></label><div class="metrics" id="stackMetrics"></div><div class="formula-block note"><span>SIGNOFF</span><p>Use the fabricator stackup and a 2D/3D field solver for release geometry.</p></div>
+          </aside>
+        </div>
+        <div class="analysis-row"><article class="instrument plot-card wide"><div class="instrument-top"><div><span class="instrument-kicker">SENSITIVITY</span><strong>Z₀ versus trace width</strong></div><span class="scope-tag">CURRENT H / εr / T</span></div><canvas id="stackPlot" width="1500" height="400"></canvas></article></div>
+      </section>
+
+      <section id="guide" class="lab-section">
+        <div class="lab-heading"><div class="lab-index">07</div><div><span class="micro-label">DESIGN REVIEW</span><h1>Audit the channel you just built</h1><p>This page does not teach new rules. It evaluates the state created across the other labs and turns the visual experiments into engineering review questions.</p></div><div class="lab-principle"><span>WORKFLOW</span><b>Experiment → observe → quantify → review → simulate → measure.</b></div></div>
+        <div class="review-grid" id="reviewGrid"></div>
+        <article class="instrument workflow"><div class="instrument-top"><div><span class="instrument-kicker">ROUTING SEQUENCE</span><strong>A practical order of operations</strong></div><span class="scope-tag">BOARD DESIGN</span></div><div class="workflow-row"><div><b>01</b><span>Stackup</span><small>Lock reference planes and target impedance.</small></div><i>→</i><div><b>02</b><span>Interfaces</span><small>Identify edge rate, drivers, loads and topology.</small></div><i>→</i><div><b>03</b><span>Return path</span><small>Plan layer changes and stitching before routing.</small></div><i>→</i><div><b>04</b><span>Critical routes</span><small>Route clocks, SERDES and differential interfaces.</small></div><i>→</i><div><b>05</b><span>Coupling review</span><small>Inspect spacing, parallelism and victim sensitivity.</small></div><i>→</i><div><b>06</b><span>Validate</span><small>IBIS / field solver / TDR / VNA / scope.</small></div></div></article>
+      </section>
+      <section class="channel-strip" aria-label="Integrated signal path">
+        <div class="channel-strip-head">
+          <div><span class="micro-label">SYSTEM VIEW</span><strong>TX → interconnect → coupled region → layer transition → RX</strong></div>
+          <span class="strip-note">parameters propagate across every lab</span>
+        </div>
+        <div class="journey-frame"><canvas id="journeyCanvas" width="1500" height="220"></canvas></div>
+        <div class="journey-keys">
+          <button data-go="match"><span>DRV</span>Source</button>
+          <button data-go="tl"><span>Z₀</span>Trace</button>
+          <button data-go="xtalk"><span>XT</span>Coupling</button>
+          <button data-go="vias"><span>VIA</span>Transition</button>
+          <button data-go="diff"><span>RX</span>Receiver</button>
+        </div>
+      </section>
+
+    </main>
+    <footer><span>SI Studio · interactive engineering intuition</span><span>Models are intentionally first-order; use simulation and measurement for signoff.</span></footer>
+  </div>
+</div>
+<link rel="stylesheet" href="screen.css">
+<script src="layout.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
