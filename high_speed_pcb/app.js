@@ -3,7 +3,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const C = {grid:'#202a33',grid2:'#43515d',text:'#eeede8',muted:'#75828d',cyan:'#63d5e8',blue:'#7f9fd2',lime:'#84c99c',amber:'#e7aa57',red:'#dc7c76',purple:'#ad91cb',copper:'#c98c56'};
 
 const defaults = {
-  probePct:100,windowNs:12,voltsDiv:.5,waveform:'step',freqMHz:500,edgePs:300,lineMm:150,ampV:1.0,loadR:90,widthMm:.15,heightMm:.12,copperUm:35,er:4.1,
+  velocityMode:'geometry',kC:.06,kL:.04,probePct:100,windowNs:12,voltsDiv:.5,waveform:'step',freqMHz:500,edgePs:300,lineMm:150,ampV:1.0,loadR:90,widthMm:.15,heightMm:.12,copperUm:35,er:4.1,
   vpMmNs:170,sourceR:10,termR:40,termMode:'series',diffSpacing:.18,skewMm:0,diffVpp:.8,
   xtalkSpacing:.20,parallelMm:40,viaPitch:3,viaDist:1,viaFreqGHz:5,planeGap:0,fence:true
 };
@@ -15,39 +15,45 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const fmt=(v,n=2)=>Number(v).toFixed(n);
 const norm=(v,a,b)=>clamp((v-a)/(b-a),0,1);
 
-function microstripZ0(w,h,t,er){
-  w=Math.max(w,1e-5); h=Math.max(h,1e-5); t=Math.max(t,1e-5);
-  const we=w+t/Math.PI*(1+Math.log(4*Math.E/Math.sqrt((t/h)**2+(1/Math.PI/(w/t+1.1))**2)));
-  const u=we/h;
-  let ee=(er+1)/2+(er-1)/2/Math.sqrt(1+12/u);
-  if(u<1) ee+=.04*(1-u)**2;
-  return u<=1 ? (60/Math.sqrt(ee))*Math.log(8/u+.25*u) : (120*Math.PI)/(Math.sqrt(ee)*(u+1.393+.667*Math.log(u+1.444)));
+// Hammerstad-Jensen quasi-static microstrip, including finite copper thickness.
+// Dimensionless ratios; W, H, and T must use the same length unit.
+function microstripModel(w,h,t,er){
+ if(![w,h,t,er].every(Number.isFinite)||w<=0||h<=0||t<0||er<1)throw new RangeError('Invalid microstrip dimensions or dielectric constant');
+ const u=w/h,tau=t/h;
+ const du1=tau===0?0:tau/Math.PI*Math.log1p(4*Math.E*Math.tanh(Math.sqrt(6.517*u))**2/tau);
+ const dur=du1/2*(1+1/Math.cosh(Math.sqrt(er-1))),u1=u+du1,ur=u+dur;
+ const air=v=>376.730313668/(2*Math.PI)*Math.log((6+(2*Math.PI-6)*Math.exp(-((30.666/v)**.7528)))/v+Math.sqrt(1+4/v**2));
+ const a=1+Math.log((ur**4+(ur/52)**2)/(ur**4+.432))/49+Math.log1p((ur/18.1)**3)/18.7;
+ const b=.564*((er-.9)/(er+3))**.053;
+ const er0=(er+1)/2+(er-1)/2*(1+10/ur)**(-a*b);
+ const z0=air(ur)/Math.sqrt(er0),ee=er0*(air(u1)/air(ur))**2;
+ return {z0,ee,vp:299.792458/Math.sqrt(ee)};
 }
-
+function microstripZ0(w,h,t,er){return microstripModel(w,h,t,er).z0;}
+function effectiveRisePs(){
+ const T=1e6/state.freqMHz;
+ return state.waveform==='sine'?Math.asin(.8)/Math.PI*T:state.waveform==='triangle'?.4*T:state.edgePs;
+}
 function derived(){
-  const z0=microstripZ0(state.widthMm,state.heightMm,state.copperUm/1000,state.er);
-  const ee=(state.er+1)/2+(state.er-1)/2/Math.sqrt(1+12*state.heightMm/state.widthMm);
-  const vpGeom=299.8/Math.sqrt(ee);
-  const td=state.lineMm/state.vpMmNs;
-  const gammaL=state.loadR===0?-1:(state.loadR-z0)/(state.loadR+z0);
-  const srcEff=state.sourceR+(state.termMode==='series'?state.termR:0);
-  const gammaS=(srcEff-z0)/(srcEff+z0);
-  const launch=z0/(z0+srcEff);
-  const kneeGHz=500/state.edgePs;
-  const electrical=td/(state.edgePs/1000);
-  const skewPs=state.skewMm/state.vpMmNs*1000;
-  const diffCoupling=clamp(Math.exp(-state.diffSpacing/(state.widthMm*.95)),.02,.94);
-  const sh=state.xtalkSpacing/state.heightMm;
-  const xtalkK=clamp(.18*Math.exp(-state.xtalkSpacing/(state.heightMm*1.3))*(1-Math.exp(-state.parallelMm/55))*clamp(350/state.edgePs,.08,2.6),0,.48);
-  const lambda=150/state.viaFreqGHz;
-  const pitchRatio=state.viaPitch/lambda;
-  const viaBenefit=state.fence ? clamp(1-Math.pow(clamp(pitchRatio/.18,0,1),1.45),0,1)*Math.exp(-state.viaDist/8) : 0;
-  const leakage=clamp((1-viaBenefit)*(.22+.78*state.planeGap),0,1);
-  return {z0,ee,vpGeom,td,gammaL,gammaS,launch,kneeGHz,electrical,skewPs,diffCoupling,sh,xtalkK,lambda,pitchRatio,leakage};
+ const model=microstripModel(state.widthMm,state.heightMm,state.copperUm/1000,state.er);
+ const {z0,ee}=model,vpGeom=model.vp,vp=state.velocityMode==='manual'?state.vpMmNs:vpGeom;
+ const td=state.lineMm/vp,srcEff=state.sourceR+(state.termMode==='series'?state.termR:0);
+ const loadEff=state.termMode==='parallel'?(state.loadR===0||state.termR===0?0:state.loadR*state.termR/(state.loadR+state.termR)):state.loadR;
+ const gammaL=(loadEff-z0)/(loadEff+z0),gammaS=(srcEff-z0)/(srcEff+z0),launch=z0/(z0+srcEff);
+ const risePs=effectiveRisePs(),kneeGHz=state.waveform==='sine'?state.freqMHz/1000:500/risePs;
+ const electrical=td/(risePs/1000),skewPs=state.skewMm/vp*1000;
+ // Drawing weights only, never exposed as extracted electrical coefficients.
+ const diffCoupling=Math.exp(-state.diffSpacing/(state.heightMm*1.3));
+ const sh=state.xtalkSpacing/state.heightMm,xtalkK=(state.kC+state.kL)/4;
+ // Bulk-dielectric wavelength is a geometric reference, not a via-mode solution.
+ const lambda=299.792458/Math.sqrt(state.er)/state.viaFreqGHz,pitchRatio=state.viaPitch/lambda;
+ const fieldCueStrength=state.fence?clamp(state.viaDist/6*.5+pitchRatio*.5+state.planeGap*.5,0,1):1;
+ return {z0,ee,vpGeom,vp,td,srcEff,loadEff,gammaL,gammaS,launch,risePs,kneeGHz,electrical,skewPs,diffCoupling,sh,xtalkK,lambda,pitchRatio,fieldCueStrength};
 }
 
 function unit(key,v){
-  const n={probePct:[0,' %'],windowNs:[0,' ns'],voltsDiv:[2,' V/div'],freqMHz:[0,' MHz'],edgePs:[0,' ps'],lineMm:[0,' mm'],ampV:[2,' V'],loadR:[0,' Ω'],widthMm:[3,' mm'],heightMm:[3,' mm'],copperUm:[0,' µm'],er:[2,''],vpMmNs:[0,' mm/ns'],sourceR:[0,' Ω'],termR:[0,' Ω'],diffSpacing:[2,' mm'],skewMm:[1,' mm'],diffVpp:[2,' Vpp'],xtalkSpacing:[2,' mm'],parallelMm:[0,' mm'],viaPitch:[1,' mm'],viaDist:[1,' mm'],viaFreqGHz:[1,' GHz'],planeGap:[0,'%']}[key];
+  if(key==='freqMHz'&&state.waveform==='random')return fmt(v,0)+' Mbit/s';
+  const n={kC:[3,''],kL:[3,''],probePct:[0,' %'],windowNs:[0,' ns'],voltsDiv:[2,' V/div'],freqMHz:[0,' MHz'],edgePs:[0,' ps'],lineMm:[0,' mm'],ampV:[2,' V'],loadR:[0,' Ω'],widthMm:[3,' mm'],heightMm:[3,' mm'],copperUm:[0,' µm'],er:[2,''],vpMmNs:[0,' mm/ns'],sourceR:[0,' Ω'],termR:[0,' Ω'],diffSpacing:[2,' mm'],skewMm:[1,' mm'],diffVpp:[2,' Vpp'],xtalkSpacing:[2,' mm'],parallelMm:[0,' mm'],viaPitch:[1,' mm'],viaDist:[1,' mm'],viaFreqGHz:[1,' GHz'],planeGap:[0,'%']}[key];
   if(key==='planeGap') return fmt(v*100,0)+'%';
   return n ? fmt(v,n[0])+n[1] : String(v);
 }
@@ -81,6 +87,7 @@ const changeText={
 };
 
 function syncBindings(){
+  $$('[data-bind="vpMmNs"]').forEach(el=>el.disabled=state.velocityMode!=='manual');
   $$('#termMode button').forEach(b=>b.classList.toggle('active',b.dataset.mode===state.termMode));
   $$('#fenceMode button').forEach(b=>b.classList.toggle('active',(b.dataset.mode==='on')===state.fence));
   $$('[data-bind="freqMHz"]').forEach(el=>{el.disabled=state.waveform==='step'});
@@ -88,11 +95,11 @@ function syncBindings(){
   $$('.frequency-label').forEach(el=>el.textContent=state.waveform==='random'?'Symbol rate':state.waveform==='step'?'Frequency · single step':'Frequency');
 
   $$('[data-bind]').forEach(el=>{
-    el.value=state[el.dataset.bind];
+    el.value=el.dataset.bind==='vpMmNs'&&state.velocityMode!=='manual'?derived().vp:state[el.dataset.bind];
     const min=+el.min||0,max=+el.max||100,v=+el.value;
     el.style.setProperty('--pct',`${clamp((v-min)/(max-min),0,1)*100}%`);
   });
-  $$('[data-out]').forEach(o=>{o.textContent=unit(o.dataset.out,state[o.dataset.out])});
+  $$('[data-out]').forEach(o=>{o.textContent=unit(o.dataset.out,o.dataset.out==='vpMmNs'?derived().vp:state[o.dataset.out])});
 }
 
 function announceChange(key,sectionId){
@@ -112,7 +119,8 @@ function announceChange(key,sectionId){
 }
 
 $$('[data-bind]').forEach(el=>el.addEventListener('input',()=>{
-  state[el.dataset.bind]=el.dataset.bind==='waveform'?el.value:+el.value;
+  state[el.dataset.bind]=['waveform','velocityMode'].includes(el.dataset.bind)?el.value:+el.value;
+  if(el.dataset.bind==='vpMmNs')state.velocityMode='manual';
   syncBindings();
   announceChange(el.dataset.bind,el.closest('.lab-section')?.id||active);
   renderStatic();
@@ -166,18 +174,56 @@ function resistor(ctx,x1,y,x2,c=C.amber,width=2){
 function resistorV(ctx,x,y1,y2,c=C.cyan,width=2){
   const n=7,lead=(y2-y1)*.12;line(ctx,x,y1,x,y1+lead,c,width);line(ctx,x,y2-lead,x,y2,c,width);ctx.save();ctx.strokeStyle=c;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x,y1+lead);const span=y2-y1-2*lead;for(let i=1;i<=n;i++){const y=y1+lead+span*i/n,xx=x+(i===n?0:(i%2?7:-7));ctx.lineTo(xx,y)}ctx.stroke();ctx.restore();
 }
+const traceVisibility = {};
+const traceSpecs = {
+  tlCanvas: [
+    {key:'inc',name:'Forward',color:C.cyan,width:2,dash:[6,4],help:'Forward-traveling voltage along the line, including source re-reflections; not the open-circuit driver voltage.'},
+    {key:'ref',name:'Reflected',color:C.red,width:2,dash:[3,3],help:'Backward-traveling voltage along the line.'},
+    {key:'load',name:'Load',color:C.amber,width:4,dash:[8,6],help:'Actual load voltage at this instant, drawn as a horizontal reference.'},
+    {key:'total',name:'Sum',color:C.lime,width:2.5,dash:[],help:'Forward plus reflected at each position.'}
+  ],
+  diffPlot: [{key:'p',name:'V+',color:C.cyan},{key:'m',name:'V−',color:C.purple},{key:'diff',name:'Vdiff',color:C.lime}],
+  cmPlot: [{key:'cm',name:'Common mode',color:C.amber}],
+  xtalkPlot: [{key:'aggressor',name:'Aggressor @ near',color:C.cyan},{key:'next',name:'NEXT @ near',color:C.amber},{key:'fext',name:'FEXT @ far',color:C.red}],
+  viaPlot: [{key:'pitch_ratio',name:'Pitch / wavelength',color:C.lime}],
+  stackPlot: [{key:'z0',name:'Impedance Z₀',color:C.cyan}]
+};
+for(const id of ['tlPlot','matchPlot'])traceSpecs[id]=traceSpecs.tlCanvas.map(s=>({...s,help:s.key==='load'?'Actual receiver voltage at x = L.':s.key==='total'?'Forward + reflected at the probe. Equals Load when the probe is at 100%.':s.key==='inc'?'Forward-traveling voltage at the probe. The initial launch is Vs × Z₀ / (Rs + Z₀).':'Backward-traveling voltage at the probe.'}));
+for(const id of ['tlPlot','matchPlot'])traceSpecs[id].unshift({key:'driver',name:'Driver Vs',color:C.purple,width:1.8,dash:[10,4],help:'Open-circuit generator voltage at t, before source resistance and propagation. Use this as the timing reference.'});
+function traceOn(id,key){return traceVisibility[id]?.[key]!==false;}
+function ensureTraceControls(canvas){
+  const specs=traceSpecs[canvas.id];
+  if(!specs||canvas._traceControls)return;
+  const bar=document.createElement('fieldset');bar.className='trace-controls';
+  const legend=document.createElement('legend');legend.textContent='Visible traces';bar.append(legend);
+  for(const spec of specs){
+    const label=document.createElement('label');label.title=spec.help||spec.name;
+    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=traceOn(canvas.id,spec.key);
+    checkbox.dataset.traceCanvas=canvas.id;checkbox.dataset.traceKey=spec.key;
+    checkbox.setAttribute('aria-label',`Show ${spec.name} in ${canvas.id}`);
+    checkbox.addEventListener('change',()=>{(traceVisibility[canvas.id]||={})[spec.key]=checkbox.checked;renderStatic()});
+    const swatch=document.createElement('span');swatch.className='trace-swatch';swatch.style.background=spec.color;
+    label.append(checkbox,swatch,document.createTextNode(spec.name));bar.append(label);
+  }
+  const viewport=canvas.closest('.viewport');if(viewport)viewport.before(bar);else canvas.before(bar);
+  canvas._traceControls=bar;
+}
 function plot(canvas,series,opt={},cursor=null){
+  ensureTraceControls(canvas);
+  const specs=traceSpecs[canvas.id];
+  series=series.map((item,i)=>({...item,...(specs?.[i]||{})})).filter(item=>traceOn(canvas.id,item.key));
   const {ctx,w,h}=prep(canvas);ctx.clearRect(0,0,w,h);scopeBackdrop(ctx,w,h);const l=58,r=18,t=24,b=38,pw=w-l-r,ph=h-t-b;
-  for(let i=0;i<=4;i++){const y=t+ph*i/4;line(ctx,l,y,w-r,y,C.grid,1);const val=lerp(opt.ymax,opt.ymin,i/4);txt(ctx,fmt(val,opt.yDigits??2),l-8,y+4,C.muted,9,'right')}
+  for(let i=0;i<=8;i++){const y=t+ph*i/8;line(ctx,l,y,w-r,y,C.grid,1);const val=lerp(opt.ymax,opt.ymin,i/8);txt(ctx,fmt(val,opt.yDigits??2),l-8,y+4,C.muted,9,'right')}
   line(ctx,l,t,l,h-b,C.grid2,1.2);line(ctx,l,h-b,w-r,h-b,C.grid2,1.2);
   const xmin=opt.xmin,xmax=opt.xmax,X=x=>l+(x-xmin)/(xmax-xmin)*pw,Y=y=>t+(opt.ymax-y)/(opt.ymax-opt.ymin)*ph;
   ctx.save();ctx.beginPath();ctx.rect(l,t,pw,ph);ctx.clip();
-  series.forEach(s=>{ctx.save();ctx.strokeStyle=s.color;ctx.lineWidth=s.width||2;ctx.beginPath();s.data.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));ctx.stroke();ctx.restore()});
+  series.forEach(s=>{ctx.save();ctx.strokeStyle=s.color;ctx.lineWidth=s.width||2;ctx.setLineDash(s.dash||[]);ctx.beginPath();s.data.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));ctx.stroke();ctx.restore()});
   ctx.restore();
   if(opt.zero&&opt.ymin<0&&opt.ymax>0)line(ctx,l,Y(0),w-r,Y(0),C.grid2,1,[4,4]);
   if(cursor!=null&&cursor>=xmin&&cursor<=xmax){const x=X(cursor);line(ctx,x,t,x,h-b,'rgba(255,255,255,.45)',1,[3,3]);glowDot(ctx,x,h-b,3,C.text,.8)}
   txt(ctx,opt.xLabel||'',(l+w-r)/2,h-10,C.muted,9,'center');txt(ctx,opt.yLabel||'',12,t+ph/2,C.muted,9,'center');txt(ctx,fmt(xmin,opt.xDigits??2),l,h-18,C.muted,9);txt(ctx,fmt(xmax,opt.xDigits??2),w-r,h-18,C.muted,9,'right');
-  if(opt.legend){let x=l;opt.legend.forEach(it=>{line(ctx,x,t+6,x+17,t+6,it.color,3);txt(ctx,it.name,x+23,t+9,C.text,9);x+=95})}
+  if(!series.length)txt(ctx,'All traces hidden',w/2,h/2,C.muted,12,'center');
+  if(opt.note)txt(ctx,opt.note,l,14,C.muted,11);
 }
 
 function switchTab(id){
@@ -203,17 +249,26 @@ function syncTime(){
  $$('[data-scrub]').forEach(el=>el.value=simT/8%1*1000);
  $$('[data-time]').forEach(el=>el.textContent=fmt(modelTime(),3)+' ns');
 }
+$$('[data-probe-position]').forEach(button=>button.onclick=()=>{state.probePct=+button.dataset.probePosition;syncBindings();renderStatic()});
+$$('[data-phase-example]').forEach(button=>button.onclick=()=>{
+  Object.assign(state,defaults,{velocityMode:'manual',waveform:'sine',freqMHz:250,lineMm:170,probePct:50,windowNs:12});
+  state.termR=derived().z0-state.sourceR;state.loadR=100;
+  simT=3;paused=true;$('pauseBtn').textContent='▶ Resume';
+  for(const id of ['tlPlot','matchPlot'])delete traceVisibility[id];
+  $$('[data-trace-key]').forEach(el=>el.checked=traceOn(el.dataset.traceCanvas,el.dataset.traceKey));
+  syncBindings();renderStatic();
+});
 $('labNav').addEventListener('click',e=>{const b=e.target.closest('button[data-target]');if(b)switchTab(b.dataset.target)});
 $$('[data-go]').forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
 $('pauseBtn').onclick=()=>{paused=!paused;$('pauseBtn').innerHTML=paused?'▶ Resume':'<span class="pause-icon">Ⅱ</span> Pause';renderStatic()};
-$('resetAll').onclick=()=>{Object.assign(state,defaults);simT=0;syncBindings();renderStatic()};
+$('resetAll').onclick=()=>{for(const key of Object.keys(traceVisibility))delete traceVisibility[key];$$('[data-trace-key]').forEach(el=>el.checked=true);Object.assign(state,defaults);simT=0;syncBindings();renderStatic()};
 $('termMode').onclick=e=>{const b=e.target.closest('button[data-mode]');if(!b)return;state.termMode=b.dataset.mode;$$('#termMode button').forEach(x=>x.classList.toggle('active',x===b));announceChange('termR','match');renderStatic()};
 $('fenceMode').onclick=e=>{const b=e.target.closest('button[data-mode]');if(!b)return;state.fence=b.dataset.mode==='on';$$('#fenceMode button').forEach(x=>x.classList.toggle('active',x===b));announceChange('viaPitch','vias');renderStatic()};
 fetch('/api/health').then(r=>r.json()).then(()=>{$('serverStatus').textContent='Python engine'}).catch(()=>{});
 
 function renderTelemetry(){
   const d=derived();
-  $('globalTelemetry').innerHTML=metric('Calculated Z₀',fmt(d.z0,1)+' Ω',sev(Math.abs(d.z0-50),3,8))+metric('1-way delay',fmt(d.td,3)+' ns')+metric('td / tr',fmt(d.electrical,2),sev(d.electrical,.2,.5))+metric('Edge knee',fmt(d.kneeGHz,2)+' GHz');
+  $('globalTelemetry').innerHTML=metric('Calculated Z₀',fmt(d.z0,1)+' Ω',sev(Math.abs(d.z0-50),3,8))+metric('1-way delay',fmt(d.td,3)+' ns')+metric('td / tr',fmt(d.electrical,2),sev(d.electrical,.2,.5))+metric(state.waveform==='sine'?'Tone frequency':'0.5/tr heuristic',fmt(d.kneeGHz,2)+' GHz');
 }
 
 function drawJourney(){
@@ -262,37 +317,67 @@ function wavesAt(x,t,p=bounceParams()){
   }
   return {inc,ref,total:inc+ref};
 }
-function receiverPlot(canvas,p=bounceParams()){
-  const T=timeWindow(),data=[],input=[];
-  for(let i=0;i<1000;i++){const t=T*i/999;data.push([t,wavesAt(1,t,p).total]);input.push([t,state.ampV*sourceSignal(t)]);}
-  const peak=state.voltsDiv*4;
-  plot(canvas,[{data:input,color:C.blue},{data,color:C.lime}],{xmin:0,xmax:T,ymin:-peak,ymax:peak,xLabel:'time (ns)',yLabel:'voltage (V)',yDigits:2,zero:true,legend:[{name:'driver Vs',color:C.blue},{name:'load total',color:C.lime}]},modelTime());
+function voltageTraces(p=bounceParams()){
+  const data={driver:[],inc:[],ref:[],load:[],total:[]},T=timeWindow(),x=state.probePct/100,count=sampleCount();
+  for(let i=0;i<count;i++){
+    const t=T*i/(count-1),v=wavesAt(x,t,p),load=x===1?v.total:wavesAt(1,t,p).total;
+    data.driver.push([t,state.ampV*sourceSignal(t)]);data.inc.push([t,v.inc]);data.ref.push([t,v.ref]);data.total.push([t,v.total]);data.load.push([t,load]);
+  }
+  return data;
 }
+function timingInfo(p=bounceParams()){
+  const x=state.probePct/100,theta=2*Math.PI*state.freqMHz/1000*p.td;
+  const q=p.gl*p.gs,dr=1-q*Math.cos(2*theta),di=q*Math.sin(2*theta);
+  const gain=Math.abs(1+p.gl)<1e-12?0:p.launch*(1+p.gl)/Math.hypot(dr,di);
+  const wrap=v=>((v+180)%360+360)%360-180;
+  return {forward:x*p.td,firstReflection:(2-x)*p.td,lag:2*(1-x)*p.td,
+    oneWayDegrees:theta*180/Math.PI,loadGain:gain,
+    loadPhase:gain<1e-10?null:wrap((-theta-Math.atan2(di,dr))*180/Math.PI)};
+}
+function updateTimingReadout(canvas,p){
+  if(!canvas._timingReadout){
+    const row=document.createElement('div');row.className='timing-readout';canvas.after(row);canvas._timingReadout=row;
+  }
+  const q=timingInfo(p);
+  const message=state.waveform==='sine'
+    ? `One-way lag ${fmt(q.oneWayDegrees,1)}° · settled Load/Vs phase ${q.loadPhase===null?'undefined (zero load voltage)':fmt(q.loadPhase,1)+'°'}`
+    : 'Edge time changes transition shape, not propagation velocity.';
+  const content=`Flight time ${fmt(p.td,3)} ns · Reflected / forward path-delay difference at probe ${fmt(q.lag,3)} ns. ${message}`;
+  if(canvas._timingReadout.textContent!==content)canvas._timingReadout.textContent=content;
+}
+function receiverPlot(canvas,p=bounceParams()){
+  updateTimingReadout(canvas,p);
+  const data=voltageTraces(p),peak=state.voltsDiv*4;
+  plot(canvas,traceSpecs[canvas.id].map(spec=>({...spec,data:data[spec.key]})),{xmin:0,xmax:timeWindow(),ymin:-peak,ymax:peak,xLabel:'time (ns)',yLabel:'voltage (V)',yDigits:2,zero:true,note:state.probePct===100?'Probe at load: reflected = ΓL × forward; Sum = Load. Compare against Driver Vs.':`Probe ${fmt(state.probePct,0)}%: forward arrives ${fmt(state.probePct/100*p.td,3)} ns; first reflection ${fmt((2-state.probePct/100)*p.td,3)} ns`},modelTime());
+}
+
 function travelingTrace(ctx,x0,x1,y,t,amplitude,color,delay=0){
   const td=derived().td;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;
   for(let i=0;i<=320;i++){const q=i/320,v=sourceSignal(t-q*td-delay),x=lerp(x0,x1,q),yy=y-amplitude*v;i?ctx.lineTo(x,yy):ctx.moveTo(x,yy)}ctx.stroke();
 }
 function renderTLText(){
-  const bp=bounceParams(),d={...bp,gammaL:bp.gl},rl=Math.abs(d.gammaL)<1e-5?99:-20*Math.log10(Math.abs(d.gammaL));
-  $('tlMetrics').innerHTML=metric('Z₀ from stackup',fmt(d.z0,1)+' Ω',sev(Math.abs(d.z0-50),3,8))+metric('ΓL',fmt(d.gammaL,3),sev(Math.abs(d.gammaL),.08,.25))+metric('Return loss',rl>90?'∞ dB':fmt(rl,1)+' dB',sev(rl,20,10,true))+metric('td / tr',fmt(d.electrical,2),sev(d.electrical,.2,.5));
-  $('tlInsight').innerHTML=`<span class="tag">${Math.abs(d.gammaL)<.05?'MATCHED LOAD':d.gammaL>0?'HIGH-Z LOAD':'LOW-Z LOAD'}</span><div class="big">${d.gammaL>=0?'+':''}${fmt(d.gammaL*100,1)}% voltage reflection</div><p>${d.gammaL>0?'The reflected voltage keeps the incident polarity.':d.gammaL<0?'The reflected voltage inverts because the load impedance is below Z₀.':'The load absorbs the traveling wave.'}</p><ul><li>One-way delay: <b>${fmt(d.td,3)} ns</b></li><li>Round trip: <b>${fmt(2*d.td,3)} ns</b></li><li>Current stackup: <b>${fmt(d.z0,1)} Ω</b>.</li></ul>`;
+  const bp=bounceParams(),d={...bp,gammaL:bp.gl},rl=d.gammaL===0?Infinity:-20*Math.log10(Math.abs(d.gammaL));
+  $('tlMetrics').innerHTML=metric('Z₀ from stackup',fmt(d.z0,1)+' Ω',sev(Math.abs(d.z0-50),3,8))+metric('ΓL',fmt(d.gammaL,3),sev(Math.abs(d.gammaL),.08,.25))+metric('Return loss',Number.isFinite(rl)?fmt(rl,1)+' dB':'∞ dB',sev(rl,20,10,true))+metric('td / tr',fmt(d.electrical,2),sev(d.electrical,.2,.5));
+  $('tlInsight').innerHTML=`<span class="tag">${Math.abs(d.gammaL)<.05?'MATCHED LOAD':d.gammaL>0?'HIGH-Z LOAD':'LOW-Z LOAD'}</span><div class="big">${d.gammaL>=0?'+':''}${fmt(d.gammaL*100,1)}% voltage reflection</div><p>${d.gammaL>0?'The reflected voltage keeps the incident polarity.':d.gammaL<0?'The reflected voltage inverts because the load impedance is below Z₀.':'The load absorbs the traveling wave.'}</p><ul><li>One-way delay: <b>${fmt(d.td,3)} ns</b></li><li>Round trip: <b>${fmt(2*d.td,3)} ns</b></li><li>Current stackup: <b>${fmt(d.z0,1)} Ω</b>.</li></ul><p><b>Why a larger load resistance can mean more voltage:</b> it draws less current, so less voltage is dropped across the source resistance. For a settled DC step in this lossless resistive model, Vload = Vs × RL / (Rs + RL), using the effective source and load resistances.</p><p>The initial forward wave is Vs × Z₀ / (Rs + Z₀), not the full open-circuit driver voltage. A load above Z₀ gives a positive reflection. Forward + reflected gives the local total; at the load, that total is exactly Vload. Load and Sum therefore overlap when the probe is at 100%.</p><p><b>Phase and delay:</b> increasing length changes td = L/vp. At a probe x along the line (x = 0 at source, 1 at load), the first forward wave arrives at x·td and the first reflection at (2−x)·td. Their path-delay difference is 2(1−x)·td. At x = 1 this difference is zero. A purely resistive load gives 0° reflection phase for ΓL &gt; 0, 180° for ΓL &lt; 0, and no reflected signal at ΓL = 0. Re-reflections can still change the total load phase relative to Driver Vs. The sine phase readout is an analytical steady-state value; the startup plot may still be settling.</p>`;
 }
 
 function drawTL(){
+ ensureTraceControls($('tlCanvas'));
  const p=bounceParams(),{ctx,w,h}=prep($('tlCanvas'));ctx.clearRect(0,0,w,h);
  const x0=64,x1=w-36,top=64,bottom=h-74,base=(top+bottom)/2,scale=(bottom-top)/(8*state.voltsDiv),t=modelTime();
  for(let n=-4;n<=4;n++){const y=base-n*state.voltsDiv*scale;line(ctx,x0,y,x1,y,n===0?C.grid2:C.grid);txt(ctx,fmt(n*state.voltsDiv,2),x0-9,y+4,C.muted,11,'right');}
- const samples=Array.from({length:401},(_,i)=>wavesAt(i/400,t,p));
+ const load=wavesAt(1,t,p).total;
+ const samples=Array.from({length:401},(_,i)=>({...wavesAt(i/400,t,p),load}));
  ctx.save();ctx.beginPath();ctx.rect(x0,top,x1-x0,bottom-top);ctx.clip();
- for(const [key,color,width,dash] of [['inc',C.cyan,1.7,[6,4]],['ref',C.red,1.7,[3,3]],['total',C.lime,3,[]]]){
+ for(const {key,color,width,dash} of traceSpecs.tlCanvas.filter(spec=>traceOn('tlCanvas',spec.key))){
   ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);
   samples.forEach((v,i)=>{const x=lerp(x0,x1,i/400),y=base-v[key]*scale;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
  }
  ctx.restore();
  const x=lerp(x0,x1,state.probePct/100),v=wavesAt(state.probePct/100,t,p);
  line(ctx,x,top,x,bottom,C.text,1,[3,4]);
- for(const [key,color] of [['inc',C.cyan],['ref',C.red],['total',C.lime]])if(Math.abs(v[key])<=4*state.voltsDiv)glowDot(ctx,x,base-v[key]*scale,key==='total'?5:3,color);
- txt(ctx,`FORWARD →  /  ← REFLECTED`,x0,24,C.muted,12);
+ for(const [key,color] of [['inc',C.cyan],['ref',C.red],['total',C.lime]])if(traceOn('tlCanvas',key)&&Math.abs(v[key])<=4*state.voltsDiv)glowDot(ctx,x,base-v[key]*scale,key==='total'?5:3,color);
+ txt(ctx,`FORWARD → / ← REFLECTED · LOAD: horizontal reference`,x0,24,C.muted,11);
  txt(ctx,`t = ${fmt(t,3)} ns`,x1,44,C.text,12,'right');
  txt(ctx,'SOURCE',x0,bottom+24,C.cyan,12);txt(ctx,'LOAD',x1,bottom+24,C.red,12,'right');
  txt(ctx,`${state.lineMm} mm · Z₀ ${fmt(p.z0,1)} Ω · td ${fmt(p.td,3)} ns`,(x0+x1)/2,h-15,C.muted,12,'center');
@@ -301,20 +386,13 @@ function drawTL(){
 }
 
 function renderMatchText(){
-  const d=derived();let gl=d.gammaL;
-  if(state.termMode==='parallel'){const reff=1/(1/state.loadR+1/Math.max(state.termR,.001));gl=(reff-d.z0)/(reff+d.z0)}
-  const gs=d.gammaS;
-  $('matchMetrics').innerHTML=metric('Launch V/Vs',fmt(d.launch,3))+metric('Γsource',fmt(gs,3),sev(Math.abs(gs),.08,.25))+metric('Γload',fmt(gl,3),sev(Math.abs(gl),.08,.25))+metric('Rs effective',fmt(state.sourceR+(state.termMode==='series'?state.termR:0),0)+' Ω',state.termMode==='series'?sev(Math.abs(state.sourceR+state.termR-d.z0),3,8):'');
-  $('matchCaption').textContent=state.termMode==='series'?'series source termination':state.termMode==='parallel'?'parallel load termination':'no termination';
+ const d=bounceParams();
+ $('matchMetrics').innerHTML=metric('Launch V/Vs',fmt(d.launch,3))+metric('Γsource',fmt(d.gs,3))+metric('Γload',fmt(d.gl,3))+metric('Effective load',fmt(d.loadEff,1)+' Ω');
+ $('matchCaption').textContent=state.termMode==='series'?'series source termination':state.termMode==='parallel'?'parallel load termination':'no termination';
 }
-function bounceParams(){
-  const d=derived();let gl=d.gammaL,launch=d.launch,gs=d.gammaS;
-  if(state.termMode==='parallel'){const reff=1/(1/state.loadR+1/Math.max(state.termR,.001));gl=(reff-d.z0)/(reff+d.z0);launch=d.z0/(state.sourceR+d.z0);gs=(state.sourceR-d.z0)/(state.sourceR+d.z0)}
-  if(state.termMode==='none'){launch=d.z0/(state.sourceR+d.z0);gs=(state.sourceR-d.z0)/(state.sourceR+d.z0)}
-  const loadEff=state.termMode==='parallel'?(state.loadR===0||state.termR===0?0:state.loadR*state.termR/(state.loadR+state.termR)):state.loadR;
-  gl=(loadEff-d.z0)/(loadEff+d.z0);
-  return {...d,gl,gs,launch,loadEff};
-}
+
+function bounceParams(){const d=derived();return {...d,gl:d.gammaL,gs:d.gammaS};}
+
 function drawMatch(){
   const p=bounceParams(),{ctx,w,h}=prep($('matchCanvas'));ctx.clearRect(0,0,w,h);
   const sx=w*.23,lx=w*.77,schemY=75;
@@ -339,11 +417,11 @@ function drawMatch(){
 
 function renderDiffText(){
   const d=derived(),cm=Math.max(...diffSignals().datC.map(v=>Math.abs(v[1])));
-  $('diffMetrics').innerHTML=metric('Pair field coupling',fmt(d.diffCoupling*100,1)+'%')+metric('Skew delay',fmt(d.skewPs,1)+' ps',sev(d.skewPs/state.edgePs,.1,.3))+metric('Skew / tr',fmt(d.skewPs/state.edgePs,2),sev(d.skewPs/state.edgePs,.1,.3))+metric('Peak Vcm est.',fmt(cm*1000,0)+' mV',sev(cm,.04,.12));
+  $('diffMetrics').innerHTML=metric('Pair spacing / H',fmt(state.diffSpacing/state.heightMm,2))+metric('Skew delay',fmt(d.skewPs,1)+' ps',sev(d.skewPs/d.risePs,.1,.3))+metric('Skew / tr',fmt(d.skewPs/d.risePs,2),sev(d.skewPs/d.risePs,.1,.3))+metric('Peak Vcm est.',fmt(cm*1000,0)+' mV',sev(cm,.04,.12));
 }
 function diffSignals(){
- const d=derived(),T=timeWindow()*1000,datP=[],datM=[],datD=[],datC=[];
- for(let i=0;i<1000;i++){const t=T*i/999,vp=state.diffVpp/4*sourceSignal(t/1000-d.td),vm=-state.diffVpp/4*sourceSignal((t-d.skewPs)/1000-d.td);datP.push([t,vp]);datM.push([t,vm]);datD.push([t,vp-vm]);datC.push([t,(vp+vm)/2]);}
+ const d=derived(),T=timeWindow()*1000,datP=[],datM=[],datD=[],datC=[],count=sampleCount();
+ for(let i=0;i<count;i++){const t=T*i/(count-1),vp=state.diffVpp/4*sourceSignal(t/1000-d.td),vm=-state.diffVpp/4*sourceSignal((t-d.skewPs)/1000-d.td);datP.push([t,vp]);datM.push([t,vm]);datD.push([t,vp-vm]);datC.push([t,(vp+vm)/2]);}
  return {d,T,datP,datM,datD,datC,xmin:0,xmax:T};
 }
 
@@ -356,8 +434,8 @@ function drawDiff(){
   const vp=state.diffVpp/4*sourceSignal(modelTime()-q.d.td),vm=-state.diffVpp/4*sourceSignal(modelTime()-q.d.td-q.d.skewPs/1000),vcm=Math.abs((vp+vm)/2),vDiff=Math.abs(vp-vm);
   const meterTop=h*.42,meterH=72;ctx.fillStyle='rgba(114,239,173,.12)';ctx.fillRect(x1+42,meterTop,18,meterH);ctx.fillStyle=C.lime;ctx.fillRect(x1+42,meterTop+meterH*(1-vDiff/1.8),18,meterH*(vDiff/1.8));
   ctx.fillStyle='rgba(255,199,95,.12)';ctx.fillRect(x1+67,meterTop,18,meterH);ctx.fillStyle=C.amber;ctx.fillRect(x1+67,meterTop+meterH*(1-clamp(vcm/.9,0,1)),18,meterH*clamp(vcm/.9,0,1));
-  txt(ctx,'Vdiff',x1+51,meterTop+meterH+15,C.lime,8,'center');txt(ctx,'Vcm',x1+76,meterTop+meterH+15,C.amber,8,'center');txt(ctx,`${fmt(vDiff,2)}V`,x1+74,h*.66,C.text,10,'center',800);
-  txt(ctx,`skew ${fmt(q.d.skewPs,1)} ps · tr ${state.edgePs} ps`,w/2,26,C.muted,9,'center');
+  txt(ctx,'|Vdiff|',x1+51,meterTop+meterH+15,C.lime,8,'center');txt(ctx,'|Vcm|',x1+76,meterTop+meterH+15,C.amber,8,'center');txt(ctx,`${fmt(vDiff,2)}V`,x1+74,h*.66,C.text,10,'center',800);
+  txt(ctx,`skew ${fmt(q.d.skewPs,1)} ps · transition ${fmt(q.d.risePs,0)} ps`,w/2,26,C.muted,9,'center');
   travelingTrace(ctx,x0,x1,y1,modelTime(),state.diffVpp*18,C.cyan);
   travelingTrace(ctx,x0,x1,y2,modelTime(),-state.diffVpp*18,C.purple,q.d.skewPs/1000);
   const cursor=modelTime()*1000;
@@ -367,19 +445,39 @@ function drawDiff(){
 
 function renderXText(){
   const d=derived(),{next,fext}=xtalkWave();
-  $('xtalkMetrics').innerHTML=metric('S / H',fmt(d.sh,2),sev(d.sh,3,1.5,true))+metric('Coupling k',fmt(d.xtalkK*100,2)+'%',sev(d.xtalkK,.03,.1))+metric('NEXT est.',fmt(next*1000,0)+' mV',sev(next,.03,.1))+metric('FEXT est.',fmt(fext*1000,0)+' mV',sev(fext,.02,.08));
-  $('xtalkInsight').innerHTML=`<span class="tag">CURRENT GEOMETRY</span><div class="big">S/H = ${fmt(d.sh,2)}</div><p>The plane position and trace spacing are drawn directly in the scene. Bring the plane closer or separate the traces and the shared field visibly collapses.</p><ul><li>${d.sh>3?'Spacing is comfortable in this simplified model.':'Increase spacing or bring the reference plane closer.'}</li><li>Parallel run: <b>${state.parallelMm} mm</b></li><li>Edge time: <b>${state.edgePs} ps</b></li></ul>`;
+  $('xtalkMetrics').innerHTML=metric('S / H',fmt(d.sh,2),sev(d.sh,3,1.5,true))+metric('Assumed kC / kL',fmt(state.kC,2)+' / '+fmt(state.kL,2))+metric('Model NEXT peak',fmt(next*1000,0)+' mV')+metric('Model FEXT peak',fmt(fext*1000,0)+' mV');
+  $('xtalkInsight').innerHTML=`<span class="tag">CURRENT GEOMETRY</span><div class="big">S/H = ${fmt(d.sh,2)}</div><p>Uniform lossless coupled-line modal model with explicit kC=Cm/C and kL=Lm/L. Each conductor is terminated in the uncoupled Z₀ at both ends. Geometry is a sketch; these coefficients are not extracted from spacing. NEXT and FEXT are different ports and are not added.</p><ul><li>FEXT cancels when kC = kL in this symmetric equal-modal-velocity case.</li><li>Parallel run: <b>${state.parallelMm} mm</b></li><li>Edge time: <b>${state.edgePs} ps</b></li></ul>`;
 }
-function xtalkAt(t){
- const d=derived(),tr=state.edgePs/1000,nextGain=state.ampV*d.xtalkK,fextGain=nextGain*clamp(state.parallelMm/120,0,.75)*.65,eps=Math.max(.0001,tr/40);
- const dv=u=>(sourceSignal(u+eps)-sourceSignal(u-eps))/(2*eps)*tr/0.8;
- const next=nextGain*dv(t),fext=-fextGain*dv(t-2*state.parallelMm/state.vpMmNs);
- return {next,fext,victim:next+fext};
+function sourceDerivative(t){
+ if(t<=0)return 0;
+ const tr=state.edgePs/1000,T=1000/state.freqMHz;
+ if(state.waveform==='sine')return 2*Math.PI/T*Math.cos(2*Math.PI*t/T);
+ if(state.waveform==='triangle')return 4/T*(Math.cos(2*Math.PI*t/T)>=0?1:-1);
+ if(state.waveform==='step')return t<tr/.8?.8/tr:0;
+ sourceSignal(t);
+ const slot=state.waveform==='square'?T/2:T,n=Math.floor(t/slot),phase=t-n*slot;
+ const target=state.waveform==='square'?(n%2?-1:1):(randomBit(n)?1:-1),start=sourceSignal.cache.starts[n],rate=1.6/tr;
+ return phase<Math.abs(target-start)/rate?Math.sign(target-start)*rate:0;
 }
+function xtalkModes(){
+ const d=derived(),tc=state.parallelMm/d.vp,Z=d.z0;
+ const mode=(z,td)=>({z0:z,td,launch:z/(z+Z),gs:(Z-z)/(Z+z),gl:(Z-z)/(Z+z)});
+ return {even:mode(Z*Math.sqrt((1+state.kL)/(1-state.kC)),tc*Math.sqrt((1+state.kL)*(1-state.kC))),
+         odd:mode(Z*Math.sqrt((1-state.kL)/(1+state.kC)),tc*Math.sqrt((1-state.kL)*(1+state.kC)))};
+}
+function xtalkAt(t,modes=xtalkModes()){
+ if(state.parallelMm===0)return {next:0,fext:0,aggressor:state.ampV*sourceSignal(t)};
+ // Modal generator amplitudes are A each: their sum gives 2A open circuit,
+ // corresponding to A nominal incident voltage with uncoupled matched ports.
+ const en=wavesAt(0,t,modes.even),on=wavesAt(0,t,modes.odd),ef=wavesAt(1,t,modes.even),of=wavesAt(1,t,modes.odd);
+ return {next:en.total-on.total,fext:ef.total-of.total,aggressor:en.total+on.total};
+}
+
+function sampleCount(){return Math.min(20001,Math.max(1001,Math.ceil(timeWindow()/Math.min(effectiveRisePs()/1000/8,1000/state.freqMHz/40))+1));}
 function xtalkWave(){
- const a=[],v=[],T=timeWindow();let next=0,fext=0;
- for(let i=0;i<1000;i++){const t=T*i/999,q=xtalkAt(t);a.push([t*1000,state.ampV*sourceSignal(t)]);v.push([t*1000,q.victim]);next=Math.max(next,Math.abs(q.next));fext=Math.max(fext,Math.abs(q.fext));}
- return {a,v,xmin:0,xmax:T*1000,next,fext};
+ const a=[],n=[],f=[],T=timeWindow(),count=sampleCount(),modes=xtalkModes();let next=0,fext=0;
+ for(let i=0;i<count;i++){const t=T*i/(count-1),q=xtalkAt(t,modes);a.push([t*1000,q.aggressor]);n.push([t*1000,q.next]);f.push([t*1000,q.fext]);next=Math.max(next,Math.abs(q.next));fext=Math.max(fext,Math.abs(q.fext));}
+ return {a,n,f,xmin:0,xmax:T*1000,next,fext};
 }
 
 function drawXtalk(){
@@ -393,21 +491,24 @@ function drawXtalk(){
   const t=modelTime(),eps=.002;
   let strongest=0;
   for(let j=0;j<=20;j++){
-   const x=lerp(cx0,cx1,j/20),local=t-(x-x0)/(x1-x0)*d.td;
+   const x=lerp(cx0,cx1,j/20),local=t-(x-x0)/(x1-x0)*state.parallelMm/d.vp;
    const slope=Math.abs(sourceSignal(local+eps)-sourceSignal(local-eps))/(2*eps);
    const activity=clamp(slope*.1*state.ampV,0,1);strongest=Math.max(strongest,activity);
    if(activity>.001)line(ctx,x,yA+4,x,yV-4,`rgba(99,213,232,${activity*clamp(d.xtalkK*5,0,.8)})`,2);
   }
-  txt(ctx,`Local field activity follows dV/dt`,w/2,24,C.muted,12,'center');
-  travelingTrace(ctx,x0,x1,yA,t,state.ampV*20,C.cyan);
-  ctx.beginPath();ctx.strokeStyle=C.amber;ctx.lineWidth=2;
-  for(let i=0;i<300;i++){const x=lerp(x0,x1,i/299),local=t-(x-x0)/(x1-x0)*d.td,y=yV-xtalkAt(local).victim*90;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke();
-  const cursor=modelTime()*1000;plot($('xtalkPlot'),[{data:q.a,color:C.cyan},{data:q.v,color:C.amber}],{xmin:q.xmin,xmax:q.xmax,ymin:-4*state.voltsDiv,ymax:4*state.voltsDiv,xLabel:'time (ps)',yLabel:'volts',legend:[{name:'aggressor',color:C.cyan},{name:'victim',color:C.amber}],zero:true},cursor);
+  txt(ctx,`Lossless modal model · kC/kL supplied, not geometry-extracted`,w/2,24,C.muted,12,'center');
+  const modes=xtalkModes();
+  for(const [sign,y,color] of [[1,yA,C.cyan],[-1,yV,C.amber]]){
+   ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;
+   for(let i=0;i<300;i++){const u=i/299,x=lerp(x0,x1,u),v=wavesAt(u,t,modes.even).total+sign*wavesAt(u,t,modes.odd).total,yy=y-v*25;i?ctx.lineTo(x,yy):ctx.moveTo(x,yy);}ctx.stroke();
+  }
+  const cursor=modelTime()*1000;plot($('xtalkPlot'),[{data:q.a,color:C.cyan},{data:q.n,color:C.amber},{data:q.f,color:C.red}],{xmin:q.xmin,xmax:q.xmax,ymin:-4*state.voltsDiv,ymax:4*state.voltsDiv,xLabel:'time (ps)',yLabel:'volts',legend:[{name:'aggressor',color:C.cyan},{name:'victim',color:C.amber}],zero:true},cursor);
 }
 
 function renderViaText(){
-  const d=derived();$('viaMetrics').innerHTML=metric('λeff',fmt(d.lambda,1)+' mm')+metric('Pitch / λ',fmt(d.pitchRatio,3),sev(d.pitchRatio,.05,.1))+metric('Containment',fmt((1-d.leakage)*100,0)+'%',sev(1-d.leakage,.8,.5,true))+metric('Leakage',fmt(d.leakage*100,0)+'%',sev(d.leakage,.2,.5));
+ const d=derived();$('viaMetrics').innerHTML=metric('Bulk dielectric λ',fmt(d.lambda,1)+' mm')+metric('Pitch / λ',fmt(d.pitchRatio,3))+metric('Return distance / λ',fmt(state.viaDist/d.lambda,3))+metric('Stitching',state.fence?'Present':'Absent');
 }
+
 function drawVia(){
   const d=derived(),{ctx,w,h}=prep($('viaCanvas'));ctx.clearRect(0,0,w,h);
   const top=h*.27,bot=h*.70,vx=w*.52,gapHalf=lerp(0,92,state.planeGap),distPx=lerp(28,125,norm(state.viaDist,.3,6));
@@ -424,13 +525,14 @@ function drawVia(){
   const p=(simT%2)/2;
   if(p<.5){const q=p*2,x=lerp(70,vx,q);glowDot(ctx,x,top-44,6,C.amber);if(state.fence)glowDot(ctx,lerp(70,vx+distPx,q),top,5,C.cyan,.85)}
   else{const q=(p-.5)*2,y=lerp(top-44,bot+44,q);glowDot(ctx,vx,y,6,C.amber);if(state.fence)glowDot(ctx,vx+distPx,lerp(top,bot,q),5,C.cyan,.85)}
-  if(!state.fence){const detour=85+175*d.leakage;ctx.strokeStyle=`rgba(255,111,127,${.28+d.leakage*.52})`;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(vx,top);ctx.bezierCurveTo(vx+detour,top+25,vx+detour,bot-25,vx,bot);ctx.stroke();txt(ctx,'return-current detour',vx+detour*.72,h*.49,C.red,9,'center')}
+  if(!state.fence){const detour=85+175*d.fieldCueStrength;ctx.strokeStyle=`rgba(255,111,127,${.28+d.fieldCueStrength*.52})`;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(vx,top);ctx.bezierCurveTo(vx+detour,top+25,vx+detour,bot-25,vx,bot);ctx.stroke();txt(ctx,'return-current detour',vx+detour*.72,h*.49,C.red,9,'center')}
   else{const nearest=vx+distPx;ctx.strokeStyle='rgba(77,225,255,.75)';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(vx,top);ctx.bezierCurveTo(nearest,top+10,nearest,bot-10,vx,bot);ctx.stroke()}
   const waveSpacing=lerp(92,15,norm(state.viaFreqGHz,.5,20)),phase=(simT*.8)%1;
-  for(let i=0;i<5;i++){const r=(i+phase)*waveSpacing;if(r<10||r>170)continue;ctx.save();ctx.strokeStyle=`rgba(255,111,127,${(.07+d.leakage*.28)*(1-r/190)})`;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(vx,(top+bot)/2,r,-1.15,1.15);ctx.stroke();ctx.restore()}
-  txt(ctx,`field wavelength cue: λeff ${fmt(d.lambda,1)} mm @ ${fmt(state.viaFreqGHz,1)} GHz`,w/2,24,C.muted,9,'center');txt(ctx,`${positions.length} fence vias visible`,w-55,h-18,state.fence?C.cyan:C.red,9,'right');
-  const data=[];for(let pitch=.5;pitch<=15;pitch+=.15){const ratio=pitch/d.lambda,b=state.fence?clamp(1-Math.pow(clamp(ratio/.18,0,1),1.45),0,1)*Math.exp(-state.viaDist/8):0,leak=clamp((1-b)*(.22+.78*state.planeGap),0,1);data.push([pitch,(1-leak)*100])}
-  plot($('viaPlot'),[{data,color:C.lime}],{xmin:.5,xmax:15,ymin:0,ymax:100,xLabel:'via pitch (mm)',yLabel:'containment %',yDigits:0},state.viaPitch);
+  for(let i=0;i<5;i++){const r=(i+phase)*waveSpacing;if(r<10||r>170)continue;ctx.save();ctx.strokeStyle=`rgba(255,111,127,${(.07+d.fieldCueStrength*.28)*(1-r/190)})`;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(vx,(top+bot)/2,r,-1.15,1.15);ctx.stroke();ctx.restore()}
+  txt(ctx,`bulk-dielectric wavelength reference: λ ${fmt(d.lambda,1)} mm @ ${fmt(state.viaFreqGHz,1)} GHz`,w/2,24,C.muted,9,'center');txt(ctx,`${positions.length} fence vias visible`,w-55,h-18,state.fence?C.cyan:C.red,9,'right');
+  const data=[];for(let i=0;i<=100;i++){const pitch=.5+14.5*i/100;data.push([pitch,pitch/d.lambda]);}
+  plot($('viaPlot'),[{data,color:C.lime}],{xmin:.5,xmax:15,ymin:0,ymax:15/d.lambda,xLabel:'via pitch (mm)',yLabel:'pitch / λ',yDigits:2},state.viaPitch);
+
 }
 
 function renderStackText(){
@@ -453,19 +555,20 @@ function renderGuide(){
   const p=bounceParams(),d={...p,gammaL:p.gl,gammaS:p.gs},items=[
     {title:'Transmission-line severity',v:d.electrical,good:.2,warn:.5,text:`td/tr = ${fmt(d.electrical,2)}. ${d.electrical>.5?'Treat routing discontinuities and terminations as first-class channel elements.':'The interconnect is electrically shorter relative to the edge, but discontinuities can still matter.'}`},
     {title:'Impedance target',v:Math.abs(d.z0-50),good:3,warn:8,text:`Current microstrip estimate is ${fmt(d.z0,1)} Ω. Width ${fmt(state.widthMm,3)} mm over ${fmt(state.heightMm,3)} mm dielectric.`},
-    {title:'Differential skew',v:d.skewPs/state.edgePs,good:.1,warn:.3,text:`Skew is ${fmt(d.skewPs,1)} ps, or ${fmt(d.skewPs/state.edgePs,2)} × the edge time.`},
+    {title:'Differential skew',v:d.skewPs/d.risePs,good:.1,warn:.3,text:`Skew is ${fmt(d.skewPs,1)} ps, or ${fmt(d.skewPs/d.risePs,2)} × the edge time.`},
     {title:'Crosstalk geometry',v:d.sh,good:3,warn:1.5,invert:true,text:`S/H = ${fmt(d.sh,2)} across ${state.parallelMm} mm of parallel routing.`},
-    {title:'Load reflection',v:Math.abs(d.gammaL),good:.08,warn:.25,text:`ΓL = ${fmt(d.gammaL,3)} at effective ZL ${fmt(d.loadEff,1)} Ω versus Z₀ ${fmt(d.z0,1)} Ω.`},
+    {title:'Load reflection',v:Math.abs(d.gammaL),good:.08,warn:.25,text:`ΓL = ${fmt(d.gammaL,3)} at effective ZL ${fmt(d.loadEff,1)} Ω versus Z₀ ${fmt(d.z0,1)} Ω. A positive load reflection can be intentional with source termination.`},
     {title:'Source termination',v:Math.abs(d.gammaS),good:.08,warn:.25,text:`ΓS = ${fmt(d.gammaS,3)} with effective source resistance ${state.sourceR+(state.termMode==='series'?state.termR:0)} Ω.`},
     {title:'Via fence pitch',v:d.pitchRatio,good:.05,warn:.1,text:`Pitch/λeff = ${fmt(d.pitchRatio,3)} at ${fmt(state.viaFreqGHz,1)} GHz equivalent frequency.`},
-    {title:'Return-path continuity',v:d.leakage,good:.2,warn:.5,text:`Relative leakage estimate is ${fmt(d.leakage*100,0)}%. ${state.fence?'Stitching vias are enabled.':'No stitching vias are present in the current scenario.'}`}
+    {title:'Return-path continuity',v:0,good:0,warn:0,text:`${state.fence?'Stitching present':'No stitching'}; distance ${fmt(state.viaDist,1)} mm. No leakage or containment prediction is available.`}
   ];
-  $('reviewGrid').innerHTML=items.map(it=>{const s=sev(it.v,it.good,it.warn,it.invert);return `<article class="card review-card"><span class="severity ${s}">${s.toUpperCase()}</span><h3>${it.title}</h3><p>${it.text}</p></article>`}).join('');
+  $('reviewGrid').innerHTML=items.map(it=>{const s=sev(it.v,it.good,it.warn,it.invert);return `<article class="card review-card"><span class="severity">MODEL CHECK</span><h3>${it.title}</h3><p>${it.text}</p></article>`}).join('');
 }
 
 function renderStatic(){
   syncTime();
   $$('.live-status').forEach(el=>el.textContent=paused?'PAUSED':'RUNNING');
+  if(typeof updateLabExplanations==='function')updateLabExplanations();
   renderTelemetry();renderTLText();renderMatchText();renderDiffText();renderXText();renderViaText();renderStackText();renderGuide();drawJourney();
   if(active==='tl')drawTL();else if(active==='match')drawMatch();else if(active==='diff')drawDiff();else if(active==='xtalk')drawXtalk();else if(active==='vias')drawVia();else if(active==='stackup')drawStack();
 }
@@ -473,6 +576,12 @@ function frame(ts){
   const dt=Math.min(.04,(ts-lastTs)/1000);lastTs=ts;if(!paused)simT+=dt;syncTime();drawJourney();
   if(active==='tl')drawTL();else if(active==='match')drawMatch();else if(active==='diff')drawDiff();else if(active==='xtalk')drawXtalk();else if(active==='vias')drawVia();else if(active==='stackup')drawStack();
   requestAnimationFrame(frame);
+}
+
+for(const name of ['voltageTraces','diffSignals','xtalkWave']){
+ const original={voltageTraces,diffSignals,xtalkWave}[name];let previous='',value;
+ const cached=(...args)=>{const key=JSON.stringify([state,args]);if(key!==previous){value=original(...args);previous=key;}return value;};
+ if(name==='voltageTraces')voltageTraces=cached;else if(name==='diffSignals')diffSignals=cached;else xtalkWave=cached;
 }
 
 window.addEventListener('resize',()=>requestAnimationFrame(renderStatic));

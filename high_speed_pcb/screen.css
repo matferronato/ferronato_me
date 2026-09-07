@@ -32,3 +32,35 @@ html[data-theme="dark"] .help-panel{background:#121a25;color:#dce7f1}
 }
 
 @media(min-width:1100px) and (min-height:680px){.screen-lab .analysis-row.two-col.equal{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.trace-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:0;padding:8px 12px;border:0;border-bottom:1px solid var(--line);background:#f5f8fb;min-width:0;flex-shrink:0;color:#344f66}
+.trace-controls legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.trace-controls label{display:flex;align-items:center;gap:6px;font-size:14px;line-height:1.4;cursor:pointer;white-space:nowrap}
+.trace-controls input{width:15px;height:15px;margin:0;accent-color:#318bab;cursor:pointer}
+.trace-controls input:focus-visible{outline:2px solid #63d5e8;outline-offset:3px}
+.trace-swatch{width:17px;height:3px;display:inline-block}.trace-controls label:has(input:not(:checked)){opacity:.55}
+html[data-theme="dark"] .trace-controls{background:#182332;color:#c7d6e5}
+@media(min-width:1100px) and (min-height:680px){.trace-controls{padding:5px 12px;gap:5px 16px}.screen-lab .stage-instrument>.instrument-top .legend{display:none}}
+.timing-readout{padding:5px 12px;font-size:12px;line-height:1.4;flex-shrink:0;color:#526f85;background:#f5f8fb;border-top:1px solid var(--line)}
+html[data-theme="dark"] .timing-readout{color:#a9bdd0;background:#182332}
+.probe-presets{display:flex;flex-wrap:wrap;gap:5px;margin:5px 12px;flex-shrink:0}.probe-presets button{font:12px system-ui;min-height:28px;border:1px solid var(--line);border-radius:4px;padding:3px 7px;color:#35647e;background:#edf4f8;cursor:pointer}.probe-presets button:focus-visible{outline:2px solid #63d5e8;outline-offset:2px}
+html[data-theme="dark"] .probe-presets button{background:#213449;color:#b9dae9}
+@media(min-width:1100px) and (min-height:680px){.trace-controls{column-gap:12px}.trace-controls label{font-size:12px}.trace-controls input{width:14px;height:14px}}
+.model-scope{padding:5px 12px;font-size:12px;line-height:1.4;color:#526f85;background:#edf4f8;flex-shrink:0;border-bottom:1px solid var(--line)}
+html[data-theme="dark"] .model-scope{background:#182332;color:#c1d0df}
+.control-row select{font:14px system-ui;min-width:0;border:1px solid var(--line);border-radius:4px;background:transparent;color:inherit;padding:4px;grid-column:1/-1}
+
+/* Per-lab teaching drawer; native details supports keyboard and screen readers. */
+.lab-explanation{border:1px solid var(--line);border-radius:9px;background:#fff;color:#263b51;margin-top:12px;min-width:0;overflow:hidden}
+.lab-explanation summary{cursor:pointer;padding:10px 14px;font-size:13px;font-weight:650;user-select:none}
+.lab-explanation summary span{margin-left:18px;font-size:12px;font-weight:400;color:#61758a}
+.lab-explanation summary:focus-visible,.lesson-body:focus-visible{outline:2px solid #3c94ba;outline-offset:-3px}
+.lesson-body{border-top:1px solid var(--line);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px;max-height:320px;overflow:auto;overscroll-behavior:contain}
+.lesson-body h3{font-size:13px;margin:0 0 6px;color:inherit}.lesson-body p,.lesson-body dd{font-size:13px;line-height:1.55;margin:0}
+.lesson-controls{grid-column:1/-1}.lesson-controls dl{display:grid;grid-template-columns:180px 1fr;gap:8px 16px;margin:0}.lesson-controls dt{font-size:13px;font-weight:600}
+html[data-theme="dark"] .lab-explanation{background:#121a25;color:#dce7f1}html[data-theme="dark"] .lab-explanation summary span{color:#9bafc3}
+@media(min-width:1100px) and (min-height:680px){
+ .screen-lab.active{grid-template-rows:auto minmax(0,1.12fr) minmax(0,1fr) auto}
+ .screen-lab>.lab-explanation{grid-column:1/-1;grid-row:4;margin:0}
+ .screen-lab .lesson-body{max-height:min(24dvh,200px)}
+}
+@media(max-width:700px){.lesson-body{grid-template-columns:1fr}.lesson-controls dl{grid-template-columns:1fr;gap:5px}.lesson-controls dd{margin-bottom:10px}.lab-explanation summary span{display:none}}
