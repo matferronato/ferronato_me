@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BusScope — read a bus transaction cycle by cycle</title>
+<meta name="description" content="Ten interface protocols drawn as real timing diagrams you can step through, stall, and export to GTKWave.">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="upgrade.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23f4f5f3'/%3E%3Cpath d='M3 21h5v-10h6v10h6v-10h5v10h4' fill='none' stroke='%231a4fd0' stroke-width='2.2'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="rail">
+  <h1 class="wordmark">BusScope</h1>
+  <nav class="views" aria-label="Sections">
+    <button class="viewtab is-on" data-view="explore" aria-current="page">Explore</button>
+    <button class="viewtab" data-view="address">AXI burst lab</button>
+    <button class="viewtab" data-view="compare">Compare</button>
+    <button class="viewtab" data-view="reference">Reference</button>
+  </nav>
+  <a class="chip" href="../scope/" style="text-decoration:none">ScopeLab ↗</a>
+  <div class="rail-actions">
+    <button class="chip" id="pngBtn" title="Save the figure as a PNG">Save figure</button>
+    <button class="chip" id="vcdBtn" title="Download a VCD you can open in GTKWave">Export VCD</button>
+    <button class="chip" id="themeBtn" aria-pressed="false">Light</button>
+  </div>
+</header>
+
+<main>
+<section class="view" id="view-address"></section>
+
+<!-- ================= EXPLORE ================= -->
+<section class="view is-on" id="view-explore">
+  <div class="explore">
+
+    <nav class="index" id="protocolIndex" aria-label="Protocols"></nav>
+
+    <div class="stage">
+      <header class="stage-head">
+        <h2 id="protoName">APB</h2>
+        <p class="stage-kind" id="protoKind"></p>
+        <p class="stage-summary" id="protoSummary"></p>
+      </header>
+
+      <form class="toolbar" id="toolbar" autocomplete="off">
+        <label class="tool" id="toolTransaction">
+          <span>Transaction</span>
+          <select id="transaction"></select>
+        </label>
+        <label class="tool" id="toolBurst" hidden>
+          <span>Burst type</span>
+          <select id="burst">
+            <option>INCR</option><option>WRAP</option><option>FIXED</option>
+          </select>
+        </label>
+        <label class="tool" id="toolMode" hidden>
+          <span>Clock mode</span>
+          <select id="spiMode">
+            <option value="0">Mode 0 — CPOL 0, CPHA 0</option>
+            <option value="1">Mode 1 — CPOL 0, CPHA 1</option>
+            <option value="2">Mode 2 — CPOL 1, CPHA 0</option>
+            <option value="3">Mode 3 — CPOL 1, CPHA 1</option>
+          </select>
+        </label>
+        <label class="tool tool-range" id="toolBeats" hidden>
+          <span>Beats <output id="beatsOut">4</output></span>
+          <input id="beats" type="range" min="1" max="8" value="4">
+        </label>
+        <label class="tool tool-range" id="toolWait" hidden>
+          <span>Stall cycles <output id="waitOut">0</output></span>
+          <input id="wait" type="range" min="0" max="4" value="0">
+        </label>
+        <label class="tool tool-check" id="toolStretch" hidden>
+          <input type="checkbox" id="stretch"><span>Clock stretching</span>
+        </label>
+
+        <label class="tool"><span>Playback speed</span><select id="speed"><option value="1000">Slow</option><option value="620" selected>Normal</option><option value="200">Fast</option></select></label>
+        <div class="transport" role="group" aria-label="Playback">
+          <button type="button" id="prevBtn" title="Previous cycle" aria-label="Previous cycle">&#8592;</button>
+          <button type="button" id="playBtn" class="is-primary">Play</button>
+          <button type="button" id="nextBtn" title="Next cycle" aria-label="Next cycle">&#8594;</button>
+        </div>
+      </form>
+
+      <div class="stat-grid" id="transactionStats"></div><p id="scenarioNote" class="fieldnote"></p>
+      <figure class="figure">
+        <div class="scroller" id="scroller">
+          <canvas id="wave" tabindex="0" role="img" aria-label="Timing diagram"></canvas>
+        </div>
+        <figcaption>
+          <span class="fig-no">Figure</span>
+          <span id="caption"></span>
+        </figcaption>
+      </figure>
+
+      <p class="legend">
+        <span><i class="sw sw-man"></i>driven by the manager</span>
+        <span><i class="sw sw-sub"></i>driven by the subordinate</span>
+        <span><i class="sw sw-event"></i>edge where the transfer is captured</span>
+        <span><i class="sw sw-idle"></i>undriven or don't care</span>
+      </p>
+
+      <section class="inspector">
+        <div class="inspector-head">
+          <h3 id="cycleTitle">Cycle 1 of 4</h3>
+          <p id="cyclePhase" class="cycle-phase"></p>
+        </div>
+        <p class="cycle-note" id="cycleNote"></p>
+        <table class="values" id="values">
+          <thead><tr><th scope="col">Signal</th><th scope="col">Value</th><th scope="col">Driven by</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <details class="model-notes"><summary>Timing model scope</summary><p>One illustrative transaction per trace. Avalon-ST uses readyLatency = 0; Avalon-MM uses waitrequestAllowance = 0. SPI bit values are summarized per full clock period; sampling markers identify the correct edge, without a half-cycle launch simulation. I2C high means release to a pull-up. AXI WRAP lengths in the explorer snap to 2, 4 or 8; use the burst lab for 16 beats.</p></details>
+      <section class="fit">
+        <h3>Where it fits</h3>
+        <dl id="fitList"></dl>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COMPARE ================= -->
+<section class="view" id="view-compare">
+  <div class="head">
+    <h2>Compare interfaces</h2>
+    <p>Pick up to four. The rows are the properties that change what you have to write in RTL, not the ones that
+       look good on a datasheet.</p>
+  </div>
+  <div class="picker" id="picker"></div>
+  <div class="matrix-wrap">
+    <table class="matrix" id="matrix"></table>
+  </div>
+  <div class="notes" id="compareNotes"></div>
+</section>
+
+<!-- ================= REFERENCE ================= -->
+<section class="view" id="view-reference">
+  <div class="head">
+    <h2>Reference</h2>
+    <p>The handful of ideas that all ten of these interfaces are assembled from.</p>
+  </div>
+
+  <dl class="ref">
+    <div>
+      <dt>Valid and ready</dt>
+      <dd>A transfer happens on a clock edge where both are high. The sender may not withdraw valid once it is
+        asserted, and the receiver may drop ready whenever it likes. Deriving valid from ready is the standard way to
+        build a deadlock, because both ends end up waiting for the other.</dd>
+    </div>
+    <div>
+      <dt>Request and wait</dt>
+      <dd>The manager asserts a request and holds every associated signal steady until the subordinate stops saying
+        wait. APB's PREADY, AHB's HREADY, Avalon's waitrequest and Wishbone's ACK are the same idea with different
+        polarity and different names.</dd>
+    </div>
+    <div>
+      <dt>Pipelining versus channels</dt>
+      <dd>AHB-Lite overlaps one address phase with one data phase, which is cheap and keeps everything in order. AXI
+        goes further and makes address, data and response fully independent, which buys throughput and costs you the
+        simple global ordering; AXI still defines ordering requirements, including per-ID rules.</dd>
+    </div>
+    <div>
+      <dt>Bursts</dt>
+      <dd>One address describes several beats, so the address phase stops being the bottleneck. AXI4 encodes length,
+        size and type; AXI4-Lite deliberately has none of it; a stream does not need it because it never had an
+        address to amortise.</dd>
+    </div>
+    <div>
+      <dt>Outstanding transactions</dt>
+      <dd>Issuing a second request before the first has answered. It allows throughput to cover memory latency, and the
+        moment you allow it you have to decide what may complete out of order. That is what AXI IDs are for.</dd>
+    </div>
+    <div>
+      <dt>Who drives the wire</dt>
+      <dd>Push-pull buses have exactly one driver per net and the direction is fixed at elaboration. I2C shares one
+        wire between every device using open drain, so the interesting question on every cycle is which end is pulling
+        it low, and the diagrams here colour it accordingly.</dd>
+    </div>
+  </dl>
+
+  <section class="axi-fields">
+    <h3>AXI burst attributes, read together</h3>
+    <dl>
+      <div><dt>AxLEN[7:0]</dt><dd>Beats minus one. 0 is a single beat, 3 is four beats, 255 is the 256-beat maximum
+        for INCR.</dd></div>
+      <div><dt>AxSIZE[2:0]</dt><dd>Bytes per beat, as a power of two. 2 means four bytes, so a four-beat INCR burst
+        covers sixteen bytes.</dd></div>
+      <div><dt>AxBURST[1:0]</dt><dd>How the address moves between beats. FIXED stays put, INCR advances, WRAP advances
+        and rolls back to the start of an aligned block, which is how a cache line fill returns the critical word
+        first.</dd></div>
+    </dl>
+    <p class="ref-note">Set a read burst to WRAP in the explorer and watch the address sequence in the caption roll
+      over rather than run past the block boundary.</p>
+  </section>
+
+  <section class="keys-block">
+    <h3>Keyboard</h3>
+    <ul class="keylist">
+      <li><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>step one cycle</span></li>
+      <li><kbd>Space</kbd><span>play or pause</span></li>
+      <li><kbd>Home</kbd><kbd>End</kbd><span>first or last cycle</span></li>
+    </ul>
+  </section>
+</section>
+
+</main>
+
+<footer class="colophon">
+  <p>No dependencies, no build step. Every waveform is generated from the models in <code>protocols.mjs</code>,
+     drawn by <code>waveform.mjs</code> and checked by <code>node tests.mjs</code>.</p>
+</footer>
+
+<script type="module" src="lab.mjs"></script>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>

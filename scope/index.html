@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en" data-theme="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ScopeLab — what an instrument does to a waveform</title>
+<meta name="description" content="Follow one signal through a real acquisition chain: analog bandwidth, anti-alias filter, ADC, reconstruction. Then watch five oscilloscopes, from $200 to seven figures, disagree about the same waveform.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230b1312'/%3E%3Cpath d='M3 16q6.5-11 13 0t13 0' fill='none' stroke='%23f0b429' stroke-width='2.4'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="rail">
+  <h1 class="wordmark">Scope<span>Lab</span></h1>
+  <nav class="views" aria-label="Sections">
+    <button class="viewtab is-on" data-view="bench" aria-current="page">Bench</button>
+    <button class="viewtab" data-view="chain">Signal chain</button>
+    <button class="viewtab" data-view="front">Front end</button>
+    <button class="viewtab" data-view="instruments">Instruments</button>
+    <button class="viewtab" data-view="field">Alias field</button>
+    <button class="viewtab" data-view="notes">Notes</button>
+  </nav>
+  <p class="rail-readout" id="railReadout" aria-live="polite">
+    <span class="lamp" id="lamp"></span><span id="railText">1.00 kHz in, 1.00 kHz out</span>
+  </p>
+  <button class="chip" id="csvBtn">Export CSV</button>
+  <button class="chip" id="linkBtn" title="Copy a link that restores this exact setup">Copy setup link</button>
+  <button class="chip" id="themeBtn" aria-pressed="false" title="Switch panel lighting">Day panel</button>
+</header>
+
+<main>
+
+<!-- ================= BENCH ================= -->
+<section class="view is-on" id="view-bench">
+
+  <div class="instrument">
+    <div class="screen-column">
+      <figure class="screen">
+        <canvas id="scope" aria-label="Oscilloscope trace"></canvas>
+        <figcaption class="sr-only">The waveform arriving at the sampler, the acquired points, and the reconstruction.</figcaption>
+      </figure>
+
+      <p id="cursorInfo" class="fieldnote">Move across the waveform to inspect the nearest acquired sample.</p>
+
+      <div class="softkeys" role="group" aria-label="Preset experiments">
+        <div class="softkey-rail" id="softkeys"></div>
+        <p class="softkey-hint">Seven setups worth seeing. Each one is a way a real acquisition goes wrong.</p>
+      </div>
+
+      <div class="verdict" id="verdict">
+        <p class="verdict-head" id="verdictHead">The record represents the input.</p>
+        <p class="verdict-body" id="verdictBody"></p>
+      </div>
+
+      <dl class="measure" id="measure">
+        <div><dt>Input</dt><dd id="mIn">1.00 kHz</dd></div>
+        <div><dt>Nyquist</dt><dd id="mNyq">4.00 kHz</dd></div>
+        <div class="is-key"><dt>Predicted alias</dt><dd id="mAlias">1.00 kHz</dd></div>
+        <div><dt>Measured from record</dt><dd id="mMeas">1.00 kHz</dd></div>
+        <div><dt>Samples per cycle</dt><dd id="mSpc">8.00</dd></div>
+      </dl>
+
+      <p class="lab-notice" id="benchNote"></p>
+
+      <section class="spectrum-block">
+        <div class="block-head">
+          <h2>Where the false frequency comes from</h2>
+          <p>Sampling copies the spectrum arriving at the converter around every multiple of the sample rate. Anything the
+             copies drop below fs/2 is indistinguishable from a real signal down there. The pale trace is the actual
+             spectrum of the record above, computed from the samples themselves.</p>
+        </div>
+        <figure class="screen screen-wide">
+          <canvas id="spectrum" aria-label="Spectrum of the sampler input and of the sampled record"></canvas>
+        </figure>
+        <p class="figure-note">
+          <span class="key key-a"></span>arriving at the sampler
+          <span class="key key-fold"></span>folded copies
+          <span class="key key-b"></span>spectrum of the record
+          <span class="key key-nyq"></span>fs/2
+        </p>
+      </section>
+    </div>
+
+    <form class="controls" id="controls" autocomplete="off">
+      <fieldset>
+        <legend>Source</legend>
+        <div class="select-row">
+          <label for="waveform">Waveform</label>
+          <select id="waveform">
+            <option value="sine">Sine</option>
+            <option value="square">Square</option>
+            <option value="triangle">Triangle</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="twotone">Two tone</option>
+          </select>
+        </div>
+        <div class="knob">
+          <label for="freq">Frequency</label><output id="freqOut" for="freq">1.00 kHz</output>
+          <input id="freq" type="range" min="0" max="1000" step="1" value="500">
+        </div>
+        <div class="knob">
+          <label for="amp">Amplitude</label><output id="ampOut" for="amp">1.00 V</output>
+          <input id="amp" type="range" min="0.05" max="2.4" step="0.05" value="1">
+        </div>
+        <div class="knob">
+          <label for="phase">Phase</label><output id="phaseOut" for="phase">0&deg;</output>
+          <input id="phase" type="range" min="0" max="360" step="1" value="0">
+        </div>
+        <div class="knob">
+          <label for="edge">Edge rate</label><output id="edgeOut" for="edge">1%</output>
+          <input id="edge" type="range" min="0.3" max="25" step="0.1" value="1">
+        </div>
+      </fieldset>
+
+      <fieldset class="stage-set" data-stage="afe">
+        <legend>Analog front end</legend>
+        <label class="switch"><input type="checkbox" id="afeOn" checked><span>In circuit</span></label>
+        <div class="knob">
+          <label for="bw">Bandwidth</label><output id="bwOut" for="bw">50.0 kHz</output>
+          <input id="bw" type="range" min="0" max="1000" step="1" value="500">
+        </div>
+        <div class="select-row">
+          <label for="resp">Response</label>
+          <select id="resp">
+            <option value="onepole">Single pole</option>
+            <option value="gaussian">Gaussian</option>
+            <option value="maxflat">Maximally flat</option>
+            <option value="brick">Brick wall</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset class="stage-set" data-stage="aa">
+        <legend>Anti-alias filter</legend>
+        <label class="switch"><input type="checkbox" id="aaOn"><span>In circuit</span></label>
+        <div class="knob">
+          <label for="aaCut">Cutoff, &times; fs/2</label><output id="aaCutOut" for="aaCut">4.00 kHz</output>
+          <input id="aaCut" type="range" min="0.25" max="2" step="0.05" value="1">
+        </div>
+        <div class="select-row">
+          <label for="aaResp">Response</label>
+          <select id="aaResp">
+            <option value="brick">Brick wall</option>
+            <option value="maxflat">Maximally flat</option>
+            <option value="gaussian">Gaussian</option>
+            <option value="onepole">Single pole</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset class="stage-set" data-stage="adc">
+        <legend>Sampler</legend>
+        <label class="switch"><input type="checkbox" id="adcOn" checked><span>In circuit</span></label>
+        <div class="knob is-primary">
+          <label for="fs">Sample rate</label><output id="fsOut" for="fs">8.00 kS/s</output>
+          <input id="fs" type="range" min="0" max="1000" step="1" value="400">
+        </div>
+        <div class="knob">
+          <label for="bits">Resolution</label><output id="bitsOut" for="bits">off</output>
+          <input id="bits" type="range" min="0" max="16" step="1" value="0">
+        </div>
+        <div class="knob">
+          <label for="offset">Clock offset</label><output id="offsetOut" for="offset">0% of Ts</output>
+          <input id="offset" type="range" min="0" max="99" step="1" value="0">
+        </div>
+        <div class="knob">
+          <label for="mem">Record length</label><output id="memOut" for="mem">1.0 Mpts</output>
+          <input id="mem" type="range" min="0" max="1000" step="1" value="500">
+        </div>
+      </fieldset>
+
+      <fieldset class="stage-set" data-stage="recon">
+        <legend>Reconstruction</legend>
+        <label class="switch"><input type="checkbox" id="reconOn" checked><span>In circuit</span></label>
+        <div class="segmented" role="radiogroup" aria-label="Reconstruction">
+          <label><input type="radio" name="recon" value="hold"><span>Hold</span></label>
+          <label><input type="radio" name="recon" value="linear"><span>Linear</span></label>
+          <label><input type="radio" name="recon" value="sinc" checked><span>Band&#8209;limited</span></label>
+        </div>
+        <p class="fieldnote" id="reconNote"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Time base and display</legend>
+        <div class="knob">
+          <label for="window">Time on screen</label><output id="windowOut" for="window">5.00 ms</output>
+          <input id="window" type="range" min="0" max="1000" step="1" value="500">
+        </div>
+        <button type="button" class="chip wide" id="fitBtn">Fit the reported waveform</button>
+        <label class="switch"><input type="checkbox" id="showIdeal"><span>Generator output, for comparison</span></label>
+        <label class="switch"><input type="checkbox" id="showAnalog" checked><span>Waveform at the sampler</span></label>
+        <label class="switch"><input type="checkbox" id="showSamples" checked><span>Sample points</span></label>
+        <label class="switch"><input type="checkbox" id="showRecon" checked><span>Reconstruction</span></label>
+        <label class="switch"><input type="checkbox" id="showInstants"><span>Sample instants</span></label>
+        <button type="button" class="chip wide" id="resetBtn">Reset the bench</button>
+      </fieldset>
+    </form>
+
+  </div>
+
+</section>
+
+<!-- ================= SIGNAL CHAIN ================= -->
+<section class="view" id="view-chain"></section>
+
+<!-- ================= FRONT END ================= -->
+<section class="view" id="view-front"></section>
+
+<!-- ================= INSTRUMENTS ================= -->
+<section class="view" id="view-instruments"></section>
+
+<!-- ================= ALIAS FIELD ================= -->
+<section class="view" id="view-field">
+  <div class="block-head wide">
+    <h2>Every combination at once</h2>
+    <p>Input frequency across, sample rate up. Colour is the frequency the sampler reports. The dark wedge on the left
+       is the only region where it reports the truth; everything to the right of it is a fold. The fan of ridges is
+       what makes aliasing so easy to walk into by accident.</p>
+  </div>
+  <figure class="screen screen-field">
+    <canvas id="field" aria-label="Reported frequency for every combination of input frequency and sample rate"></canvas>
+  </figure>
+  <form class="field-controls" id="fieldControls">
+    <div class="knob">
+      <label for="fieldFin">Input frequency</label><output id="fieldFinOut" for="fieldFin"></output>
+      <input id="fieldFin" type="range" min="0" max="30000" step="100" value="9000">
+    </div>
+    <div class="knob">
+      <label for="fieldFs">Sample rate</label><output id="fieldFsOut" for="fieldFs"></output>
+      <input id="fieldFs" type="range" min="1000" max="30000" step="100" value="8000">
+    </div>
+    <p class="field-result"><span>Sampler reports</span><strong id="fieldOut">1.00 kHz</strong></p>
+  </form>
+</section>
+
+<!-- ================= NOTES ================= -->
+<section class="view" id="view-notes">
+  <div class="block-head wide">
+    <h2>Notes from the bench</h2>
+    <p>Short answers to the questions this instrument tends to raise.</p>
+  </div>
+
+  <dl class="notes">
+    <div>
+      <dt>Nyquist frequency, fs/2</dt>
+      <dd>The highest frequency a sampler can represent without ambiguity. Above it, a sinusoid produces exactly the
+        same numbers as a lower one, so no amount of processing downstream can separate them.</dd>
+    </div>
+    <div>
+      <dt>The folding rule</dt>
+      <dd>Pick the integer k that brings <code>|f &minus; k&middot;fs|</code> into 0&hairsp;&hellip;&hairsp;fs/2. That
+        is what you will measure. Even-numbered Nyquist zones also come back mirrored, so sweeping the input upward
+        makes the reported frequency walk downward.</dd>
+    </div>
+    <div>
+      <dt>Two samples per cycle is a limit, not a target</dt>
+      <dd>The theorem needs <code>fs &gt; 2B</code> with a strict inequality, a band-limited signal, and an ideal
+        interpolator. At exactly two samples per cycle the amplitude you recover depends on sample phase, which is why
+        the clock offset control can null the waveform completely.</dd>
+    </div>
+    <div>
+      <dt>A square wave is not band-limited</dt>
+      <dd>Its edges are built from odd harmonics that run far above the fundamental, so &ldquo;two samples per period&rdquo;
+        says nothing useful about it. Sample a 1&nbsp;kHz square at 3&nbsp;kS/s and the fundamental is legal while the
+        third harmonic onwards folds back on top of it. Rate the acquisition against the edge, not the repetition rate.</dd>
+    </div>
+    <div>
+      <dt>A real square wave is band-limited, by its edge rate</dt>
+      <dd>Nothing physical carries infinite harmonics. A trapezoid with transition time <code>t<sub>r</sub></code> rolls
+        its harmonics off past roughly <code>1/(&pi;&middot;t<sub>r</sub>)</code>, which is what makes the bandwidth
+        question answerable at all. The edge rate control sets that, and every stage downstream inherits it.</dd>
+    </div>
+    <div>
+      <dt>Why a clean trace proves nothing</dt>
+      <dd>An alias is a genuine sinusoid in the data, not noise. It is stable, it triggers, it measures cleanly. The
+        record is not corrupted; it is honestly reporting a frequency that was never at the input.</dd>
+    </div>
+    <div>
+      <dt>What the anti-alias filter actually buys</dt>
+      <dd>It throws away information you were never going to represent correctly, before the sampler turns it into
+        information you cannot identify. Losing a harmonic is recoverable by design; a fold is not. A realisable filter
+        has skirts, though &mdash; set its response to anything but brick wall and some energy still gets past.</dd>
+    </div>
+    <div>
+      <dt>Bandwidth and sample rate are separate specifications</dt>
+      <dd>Bandwidth decides what reaches the sampler; sample rate decides what the sampler can represent. A fast
+        converter behind a wide front end with no filtering is the classic way to fold noise and harmonics into a
+        measurement band. A fast converter behind a narrow front end is a lot of points describing a signal that
+        already lost its detail.</dd>
+    </div>
+    <div>
+      <dt>Rise time, bandwidth, and the constant between them</dt>
+      <dd>The familiar <code>0.35/BW</code> belongs to a single-pole or Gaussian response. This page measures the
+        10&ndash;90% transition off each modelled response rather than assuming it: 0.35 for a single pole, 0.34 for a
+        Gaussian, 0.39 for a four-pole maximally flat filter and 0.45 for a brick wall &mdash; the same spread instrument
+        vendors quote as &ldquo;0.35 to 0.45, depending on response&rdquo;.</dd>
+    </div>
+    <div>
+      <dt>Reconstruction modes</dt>
+      <dd>Hold is what a plain DAC does. Linear is what most plotting code does, and it exaggerates how bad sparse
+        sampling looks. Band-limited interpolation is the one the theorem is about, and it is the only one that shows
+        the alias for what it is: a smooth sinusoid at the wrong frequency.</dd>
+    </div>
+    <div>
+      <dt>Memory depth is the third specification</dt>
+      <dd>Record length divided by sample rate is the longest window an instrument can hold at full speed. Ask for a
+        longer one and it quietly drops the sample rate to fit, which is how a setup that was safe at full rate starts
+        aliasing halfway through a zoom-out. The record length control does exactly that.</dd>
+    </div>
+    <div>
+      <dt>Where the instrument figures come from</dt>
+      <dd>On the Instruments page, bandwidth, sample rate, resolution and memory depth are published specifications for
+        the named models. Response shape, effective bits and jitter are modelled per class to sit in a plausible place,
+        not copied from a datasheet, and they are quoted at each instrument&rsquo;s full bandwidth.</dd>
+    </div>
+  </dl>
+
+  <div class="keys-block">
+    <h3>Keyboard</h3>
+    <ul class="keylist">
+      <li><kbd>1</kbd>&ndash;<kbd>7</kbd><span>load a preset</span></li>
+      <li><kbd>F</kbd><span>front end in or out</span></li>
+      <li><kbd>A</kbd><span>anti-alias filter in or out</span></li>
+      <li><kbd>S</kbd><span>sampler in or out</span></li>
+      <li><kbd>R</kbd><span>reset the bench</span></li>
+      <li><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>nudge whichever control has focus</span></li>
+    </ul>
+    <p class="fieldnote">Every control is in the address bar, so a link carries the exact setup with it.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="colophon">
+  <p>Single page, no dependencies. The signal model, folding arithmetic, front-end responses and interpolators live in
+     <code>dsp.mjs</code> and are checked by <code>node tests.mjs</code>.</p>
+</footer>
+
+<script type="module" src="main.mjs"></script>
+</body>
+</html>
