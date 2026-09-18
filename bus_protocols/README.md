@@ -9,11 +9,7 @@ I2C, SPI.
 
 ## Run
 
-```bash
-python3 server.py            # http://127.0.0.1:8782
-python3 server.py --open     # and open a browser
-python3 server.py --port 9000
-```
+Serve the repository with any static HTTP server or deploy it directly through Cloudflare.
 
 Standard library only. No JavaScript build step, no dependencies, no CDN.
 
@@ -39,7 +35,6 @@ all four SPI modes, plus VCD output validity.
 | `app.mjs` | Protocol index, controls, cycle inspector, compare view, exports. |
 | `tests.mjs` | Node test suite for the protocol models and the VCD writer. |
 | `index.html`, `styles.css` | Markup and figure styling. |
-| `server.py` | Static server that registers the `.mjs` MIME type and falls back across ports. |
 
 ## How the model works
 

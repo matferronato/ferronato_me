@@ -264,7 +264,6 @@ $('pauseBtn').onclick=()=>{paused=!paused;$('pauseBtn').innerHTML=paused?'▶ Re
 $('resetAll').onclick=()=>{for(const key of Object.keys(traceVisibility))delete traceVisibility[key];$$('[data-trace-key]').forEach(el=>el.checked=true);Object.assign(state,defaults);simT=0;syncBindings();renderStatic()};
 $('termMode').onclick=e=>{const b=e.target.closest('button[data-mode]');if(!b)return;state.termMode=b.dataset.mode;$$('#termMode button').forEach(x=>x.classList.toggle('active',x===b));announceChange('termR','match');renderStatic()};
 $('fenceMode').onclick=e=>{const b=e.target.closest('button[data-mode]');if(!b)return;state.fence=b.dataset.mode==='on';$$('#fenceMode button').forEach(x=>x.classList.toggle('active',x===b));announceChange('viaPitch','vias');renderStatic()};
-fetch('/api/health').then(r=>r.json()).then(()=>{$('serverStatus').textContent='Python engine'}).catch(()=>{});
 
 function renderTelemetry(){
   const d=derived();

@@ -1,12 +1,6 @@
 # SI Studio 6.6 — contextual lab explanations
 
-Extract, enter this folder and run:
-
-```bash
-python3 server.py
-```
-
-Open http://127.0.0.1:8421. Use `PORT=9000 python3 server.py` for another port. No extra Python packages are needed. The static UI can also open directly through index.html.
+This lab is fully client-side and is intended to be served as static files. No Python backend is required. For local development, serve this directory with any ordinary static HTTP server so browser module and asset loading behave the same way as on Cloudflare.
 
 Seven connected labs demonstrate transmission lines, termination, differential skew, crosstalk, via return geometry, microstrip impedance and model checks. The desktop layout keeps controls, animation and plots together. Lab notes and System open supporting panels. Dark/light mode, source selection, time scrubbing and individual trace controls are retained.
 
@@ -19,7 +13,7 @@ Seven connected labs demonstrate transmission lines, termination, differential s
 
 ## Mathematical review retained from 6.5
 
-- Consistent Hammerstad–Jensen microstrip impedance, permittivity and velocity in the UI and Python API.
+- Consistent Hammerstad–Jensen microstrip impedance, permittivity and velocity in the browser model.
 - Propagation comes from the stackup by default; select Manual override to control velocity independently.
 - Crosstalk uses explicit kC/kL and even/odd modes, with separate near-end and far-end outputs. The geometry sketch does not extract coupling coefficients. Amplitude A denotes nominal incident voltage; the aggressor generator is 2A open circuit.
 - Unsupported via containment/leakage and differential coupling percentages removed.
@@ -37,4 +31,4 @@ node tests/verify_math.cjs
 node tests/verify_render.cjs
 ```
 
-The tests use Node.js and Python 3 without extra packages. They verify mathematics and render execution, not browser appearance. These lossless/ideal models do not replace a field solver, IBIS/SPICE, S-parameters or measurement.
+The tests use Node.js without extra packages. They verify mathematics and render execution, not browser appearance. These lossless/ideal models do not replace a field solver, IBIS/SPICE, S-parameters or measurement.

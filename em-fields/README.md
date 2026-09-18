@@ -1,4 +1,4 @@
-# Retarded Field Bench
+# EM Field Bench
 
 An interactive 2-D visualisation of the Liénard–Wiechert field of moving charges,
 solved **per pixel on the GPU**. No dependencies beyond a browser with WebGL 2.

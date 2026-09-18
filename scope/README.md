@@ -11,11 +11,7 @@ destroyed.
 
 ## Run
 
-```bash
-python3 server.py            # http://127.0.0.1:8781
-python3 server.py --open     # and open a browser
-python3 server.py --port 9000
-```
+Serve the repository with any static HTTP server or deploy it directly through Cloudflare.
 
 Standard library only. No build step, no dependencies, no CDN — plain ES modules
 loaded by the browser, so any static file server works.

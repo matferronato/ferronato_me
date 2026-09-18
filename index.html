@@ -48,30 +48,65 @@ h1{
   font-size:1.0625rem;color:var(--muted);
 }
 
-.rack{border-top:1px solid var(--rule);margin-bottom:4rem}
-.bench{
+.rack{
   display:grid;
-  grid-template-columns:3.25rem 1fr auto;
-  align-items:center;
-  gap:1.25rem;
-  padding:1.35rem .75rem;
-  border-bottom:1px solid var(--rule);
-  text-decoration:none;color:inherit;
-  transition:background .12s ease;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1rem;
+  margin-bottom:4rem;
 }
-.bench:hover,.bench:focus-visible{background:var(--surface)}
-.bench:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
-.glyph{width:3.25rem;height:2.25rem;color:var(--signal)}
+.bench{
+  position:relative;
+  display:grid;
+  grid-template-columns:3.25rem minmax(0,1fr);
+  grid-template-rows:auto 1fr;
+  align-items:start;
+  gap:.9rem 1rem;
+  min-height:10.25rem;
+  padding:1.25rem 1.2rem 1.2rem;
+  border:1px solid var(--rule);
+  border-radius:12px;
+  background:rgba(248,249,246,.48);
+  text-decoration:none;color:inherit;
+  overflow:hidden;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease;
+}
+.bench::after{
+  content:"";
+  position:absolute;
+  inset:auto 0 0 0;
+  height:2px;
+  background:var(--signal);
+  opacity:.18;
+  transition:opacity .15s ease;
+}
+.bench:hover,.bench:focus-visible{
+  background:var(--surface);
+  border-color:#AAB8B1;
+  transform:translateY(-2px);
+  box-shadow:0 8px 22px rgba(21,27,30,.06);
+}
+.bench:hover::after,.bench:focus-visible::after{opacity:.8}
+.bench:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.glyph{
+  grid-row:1 / span 2;
+  width:3.25rem;height:2.45rem;
+  color:var(--signal);
+  margin-top:.1rem;
+}
 .glyph svg{width:100%;height:100%;display:block}
 .glyph svg *{fill:none;stroke:currentColor;stroke-width:1.35;
   stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-.name{font-size:1.0625rem;font-weight:500;letter-spacing:-.01em;margin:0}
-.what{font-size:.9375rem;color:var(--muted);margin:.15rem 0 0}
+.bench > span:nth-child(2){min-width:0;padding-right:3rem}
+.name{display:block;font-size:1.0625rem;font-weight:600;letter-spacing:-.01em;margin:0}
+.what{font-size:.92rem;line-height:1.45;color:var(--muted);margin:.3rem 0 0}
 .band{
+  position:absolute;
+  top:1rem;right:1rem;
   font-family:"IBM Plex Mono",ui-monospace,monospace;
-  font-size:.8125rem;color:var(--muted);
-  border:1px solid var(--rule);border-radius:2px;
-  padding:.15rem .5rem;white-space:nowrap;
+  font-size:.72rem;color:var(--muted);
+  border:1px solid var(--rule);border-radius:999px;
+  padding:.12rem .45rem;white-space:nowrap;
+  background:rgba(248,249,246,.75);
 }
 
 footer{
@@ -79,11 +114,16 @@ footer{
 }
 footer p{margin:0;max-width:34rem}
 
-@media (max-width:34rem){
+@media (max-width:44rem){
   header{padding:3rem 0 2rem}
-  .bench{grid-template-columns:2.5rem 1fr;gap:1rem;padding:1.15rem .25rem}
-  .glyph{width:2.5rem;height:1.9rem}
-  .band{grid-column:2;justify-self:start;margin-top:.4rem}
+  .rack{grid-template-columns:1fr}
+  .bench{min-height:8.75rem}
+}
+@media (max-width:28rem){
+  .wrap{padding:0 1rem}
+  .bench{grid-template-columns:2.6rem minmax(0,1fr);padding:1.1rem 1rem;gap:.75rem}
+  .glyph{width:2.6rem;height:2rem}
+  .bench > span:nth-child(2){padding-right:2.5rem}
 }
 @media (prefers-reduced-motion:reduce){
   .trace path{animation:none;stroke-dashoffset:0}
@@ -108,6 +148,34 @@ footer p{margin:0;max-width:34rem}
 
 <nav class="rack">
 
+  <a class="bench" href="scope/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36">
+        <path d="M3 18 H9 Q13 18 16 8 T23 18 T30 28 T37 18 H49"/>
+        <path d="M3 31 H49" opacity=".25"/>
+      </svg>
+    </span>
+    <span>
+      <span class="name">ScopeLab</span>
+      <p class="what">Analog front end, anti-aliasing, sampling, reconstruction, aliasing and oscilloscope models</p>
+    </span>
+    <span class="band">SCOPE</span>
+  </a>
+
+  <a class="bench" href="bus_protocols/">
+    <span class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 52 36">
+        <path d="M3 25 V11 H11 V25 H19 V11 H27 V25 H35 V11 H43 V25 H49"/>
+        <path d="M3 30 H49" opacity=".25"/>
+      </svg>
+    </span>
+    <span>
+      <span class="name">BusScope</span>
+      <p class="what">Cycle-accurate APB, AHB, AXI, Avalon, Wishbone, I²C and SPI timing diagrams</p>
+    </span>
+    <span class="band">BUS</span>
+  </a>
+
   <a class="bench" href="high_speed_pcb/">
     <span class="glyph" aria-hidden="true">
       <svg viewBox="0 0 52 36">
@@ -124,36 +192,6 @@ footer p{margin:0;max-width:34rem}
       <p class="what">Transmission lines, reflections, matching, differential pairs, crosstalk and vias</p>
     </span>
     <span class="band">SI</span>
-  </a>
-
-  <a class="bench" href="scope/">
-    <span class="glyph" aria-hidden="true">
-      <svg viewBox="0 0 52 36">
-        <rect x="3" y="5" width="46" height="26" rx="2"/>
-        <path d="M8 18 H14 L18 10 L23 26 L28 14 L32 21 H44"/>
-        <path d="M39 9 H44" opacity=".45"/>
-      </svg>
-    </span>
-    <span>
-      <span class="name">ScopeLab</span>
-      <p class="what">Analog bandwidth, anti-alias filtering, ADC sampling, reconstruction and aliasing</p>
-    </span>
-    <span class="band">SCOPE</span>
-  </a>
-
-  <a class="bench" href="bus_protocols/">
-    <span class="glyph" aria-hidden="true">
-      <svg viewBox="0 0 52 36">
-        <path d="M3 9 H13 V16 H23 V9 H33 V16 H49"/>
-        <path d="M3 27 H18 V20 H30 V27 H40 V20 H49"/>
-        <path d="M8 5 V31 M44 5 V31" opacity=".3"/>
-      </svg>
-    </span>
-    <span>
-      <span class="name">BusScope</span>
-      <p class="what">Cycle-by-cycle APB, AHB, AXI, Avalon, Wishbone, I²C and SPI transactions</p>
-    </span>
-    <span class="band">BUS</span>
   </a>
 
   <a class="bench" href="fft/">
@@ -194,8 +232,8 @@ footer p{margin:0;max-width:34rem}
       <svg viewBox="0 0 52 36"><circle cx="20" cy="18" r="2.5"/><path d="M27 18 A7 7 0 1 0 20 11" opacity=".85"/><path d="M34 18 A13 13 0 1 0 21 5" opacity=".6"/><path d="M41 18 A19 19 0 1 0 22 -1" opacity=".35"/></svg>
     </span>
     <span>
-      <span class="name">Retarded field bench</span>
-      <p class="what">Moving charges and the fields they drag behind them</p>
+      <span class="name">EM field bench</span>
+      <p class="what">Moving charges, retarded effects and electromagnetic field propagation</p>
     </span>
     <span class="band">EM</span>
   </a>
